@@ -5,8 +5,8 @@ This plugin is designed to run from a local source checkout and can also be pack
 ## Source Install
 
 ```bash
-git clone git@github.com:AmrMohamad/Xcoder.git /Users/amrmohamad/plugins/xcode
-cd /Users/amrmohamad/plugins/xcode
+git clone git@github.com:AmrMohamad/Xcoder.git /Users/amrmohamad/Developer/Xcoder
+cd /Users/amrmohamad/Developer/Xcoder
 chmod +x bin/xcode
 bin/xcode --version
 bin/xcode doctor --json
@@ -19,7 +19,7 @@ Add an entry for the plugin without deleting existing marketplace entries:
 ```json
 {
   "name": "xcode",
-  "path": "/Users/amrmohamad/plugins/xcode",
+  "path": "/Users/amrmohamad/Developer/Xcoder",
   "category": "Developer Tools"
 }
 ```
@@ -29,7 +29,7 @@ If your local marketplace resolves paths from `/Users/amrmohamad`, this relative
 ```json
 {
   "name": "xcode",
-  "path": "./plugins/xcode",
+  "path": "./Developer/Xcoder",
   "category": "Developer Tools"
 }
 ```
@@ -45,7 +45,7 @@ Codex may cache local plugins under:
 To refresh that cache from the source checkout:
 
 ```bash
-SOURCE=/Users/amrmohamad/plugins/xcode
+SOURCE=/Users/amrmohamad/Developer/Xcoder
 CACHE=/Users/amrmohamad/.codex/plugins/cache/local/xcode/0.3.0
 
 rsync -a --delete \
@@ -69,12 +69,12 @@ The Swift helper is optional. It improves native macOS/Xcode state sensing, but 
 Rebuild it when the binary is missing, wrong architecture, or blocked by local trust state:
 
 ```bash
-cd /Users/amrmohamad/plugins/xcode/native/XcodeNativeHelper
+cd /Users/amrmohamad/Developer/Xcoder/native/XcodeNativeHelper
 swift build -c release
 cp .build/release/xcode-native-helper ../../bin/xcode-native-helper
 chmod +x ../../bin/xcode-native-helper
 
-cd /Users/amrmohamad/plugins/xcode
+cd /Users/amrmohamad/Developer/Xcoder
 bin/xcode native helper version --json
 bin/xcode native permissions status --json
 bin/xcode native app xcode-state --json
@@ -87,7 +87,7 @@ bin/xcode native app xcode-state --json
 Create a clean zip:
 
 ```bash
-cd /Users/amrmohamad/plugins/xcode
+cd /Users/amrmohamad/Developer/Xcoder
 bin/xcode package zip --output /tmp/xcode-plugin-0.3.0.zip --json
 bin/xcode package audit --zip /tmp/xcode-plugin-0.3.0.zip --json
 ```
@@ -99,4 +99,3 @@ xcode/0.3.0/
 ```
 
 The audit fails if the archive contains macOS metadata, Python caches, Swift `.build` output, local artifacts, nested zips, wrong root prefixes, missing package manifest, missing public binaries, or non-executable public binaries.
-

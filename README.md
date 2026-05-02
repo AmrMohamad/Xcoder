@@ -11,8 +11,8 @@ It does not depend on XcodeBuildMCP. It uses Apple tools directly: `xcodebuild`,
 Clone the repo:
 
 ```bash
-git clone git@github.com:AmrMohamad/Xcoder.git /Users/amrmohamad/plugins/xcode
-cd /Users/amrmohamad/plugins/xcode
+git clone git@github.com:AmrMohamad/Xcoder.git /Users/amrmohamad/Developer/Xcoder
+cd /Users/amrmohamad/Developer/Xcoder
 chmod +x bin/xcode
 bin/xcode --version
 bin/xcode doctor --json
@@ -23,7 +23,7 @@ Register it in your local plugin marketplace without overwriting existing entrie
 ```json
 {
   "name": "xcode",
-  "path": "/Users/amrmohamad/plugins/xcode",
+  "path": "/Users/amrmohamad/Developer/Xcoder",
   "category": "Developer Tools"
 }
 ```
@@ -33,7 +33,7 @@ If your marketplace expects a relative path from `/Users/amrmohamad`, use:
 ```json
 {
   "name": "xcode",
-  "path": "./plugins/xcode",
+  "path": "./Developer/Xcoder",
   "category": "Developer Tools"
 }
 ```
@@ -106,4 +106,3 @@ Large logs, screenshots, diagnostics, and `.xcresult` data stay on disk. Respons
 - `trusted-fast` requires an explicit trust reason because skipping package plugin and macro validation is security-sensitive.
 - The Swift helper is optional and diagnostic-first. It must not run builds, run simulators, parse `.xcresult`, click UI, select schemes, or select destinations.
 - Apple `mcpbridge` is optional.
-

@@ -5,7 +5,7 @@ Run these checks before publishing or refreshing the Codex cache.
 ## Source Validation
 
 ```bash
-cd /Users/amrmohamad/plugins/xcode
+cd /Users/amrmohamad/Developer/Xcoder
 
 python3 -m json.tool .codex-plugin/plugin.json >/dev/null
 python3 -m py_compile scripts/*.py
@@ -18,7 +18,7 @@ bin/xcode doctor --json
 ## Package Validation
 
 ```bash
-cd /Users/amrmohamad/plugins/xcode
+cd /Users/amrmohamad/Developer/Xcoder
 
 bin/xcode package zip --output /tmp/xcode-plugin-0.3.0.zip --json
 bin/xcode package audit --zip /tmp/xcode-plugin-0.3.0.zip --json
