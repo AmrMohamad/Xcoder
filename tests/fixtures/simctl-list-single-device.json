@@ -1,0 +1,12 @@
+{
+  "devices": {
+    "com.apple.CoreSimulator.SimRuntime.iOS-18-5": [
+      {
+        "name": "iPhone SE (3rd generation)",
+        "udid": "AAAAAAAA-BBBB-CCCC-DDDD-000000000001",
+        "state": "Shutdown",
+        "isAvailable": true
+      }
+    ]
+  }
+}

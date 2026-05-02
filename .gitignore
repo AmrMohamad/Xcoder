@@ -1,0 +1,14 @@
+.DS_Store
+__MACOSX/
+__pycache__/
+*.py[cod]
+*.pyo
+
+.codex/xcode/artifacts/
+DerivedData/
+.build/
+
+*.zip
+*.zip.manifest.json
+*.log
+!tests/fixtures/*.log
