@@ -4,9 +4,9 @@ Run these checks before publishing or refreshing the Codex cache.
 
 ## Source Validation
 
-```bash
-cd /Users/amrmohamad/Developer/Xcoder
+From the repository root:
 
+```bash
 python3 -m json.tool .codex-plugin/plugin.json >/dev/null
 python3 -m py_compile scripts/*.py
 test -x bin/xcode
@@ -17,9 +17,9 @@ bin/xcode doctor --json
 
 ## Package Validation
 
-```bash
-cd /Users/amrmohamad/Developer/Xcoder
+From the repository root:
 
+```bash
 bin/xcode package zip --output /tmp/xcode-plugin-0.3.0.zip --json
 bin/xcode package audit --zip /tmp/xcode-plugin-0.3.0.zip --json
 ```
@@ -37,6 +37,7 @@ with zipfile.ZipFile(path) as archive:
     print("entry_count", len(names))
     print("expected_prefix_only", all(name.startswith("xcode/0.3.0/") for name in names))
     print("manifest", "xcode/0.3.0/package-manifest.json" in names)
+    print("marketplace", "xcode/0.3.0/.agents/plugins/marketplace.json" in names)
     print("has_docs_hero", "xcode/0.3.0/docs/images/xcoder-hero.png" in names)
     bad = [
         name for name in names
@@ -62,9 +63,10 @@ PY
 Expected:
 
 ```text
-entry_count 42
+entry_count 43
 expected_prefix_only True
 manifest True
+marketplace True
 has_docs_hero True
 bad_entries 0
 xcode/0.3.0/bin/xcode 0o100755 -rwxr-xr-x
@@ -74,7 +76,7 @@ xcode/0.3.0/bin/xcode-native-helper 0o100755 -rwxr-xr-x
 ## Cache Validation
 
 ```bash
-cd /Users/amrmohamad/.codex/plugins/cache/local/xcode/0.3.0
+cd "${CODEX_HOME:-$HOME/.codex}/plugins/cache/local/xcode/0.3.0"
 
 bin/xcode --version
 bin/xcode doctor --json

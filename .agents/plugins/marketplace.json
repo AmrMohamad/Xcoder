@@ -1,0 +1,21 @@
+{
+  "name": "xcoder",
+  "interface": {
+    "displayName": "Xcoder"
+  },
+  "plugins": [
+    {
+      "name": "xcode",
+      "source": {
+        "source": "url",
+        "url": "https://github.com/AmrMohamad/Xcoder.git",
+        "ref": "main"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "NONE"
+      },
+      "category": "Developer Tools"
+    }
+  ]
+}

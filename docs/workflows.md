@@ -6,8 +6,8 @@ Use this page to choose the right Xcoder path.
 
 ```bash
 bin/xcode context \
-  --path /Users/amrmohamad/Developer/Robusta/panda-customer-app-ios/Panda.xcodeproj \
-  --scheme "Panda (Debug)" \
+  --path App.xcodeproj \
+  --scheme App \
   --json
 ```
 
@@ -119,4 +119,3 @@ bin/xcode native ax xcode-windows --json
 ```
 
 `native ax xcode-windows` needs Accessibility permission. If permission is missing, the command should fail with `permission_denied`, not mutate anything.
-

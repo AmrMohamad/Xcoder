@@ -8,37 +8,43 @@ It does not depend on XcodeBuildMCP. It uses Apple tools directly: `xcodebuild`,
 
 ## Install
 
-Clone the repo:
+Install from the repository marketplace:
 
 ```bash
-git clone git@github.com:AmrMohamad/Xcoder.git /Users/amrmohamad/Developer/Xcoder
-cd /Users/amrmohamad/Developer/Xcoder
+codex plugin marketplace add AmrMohamad/Xcoder --ref main --sparse .agents/plugins
+codex plugin marketplace upgrade xcoder
+```
+
+Then open the Codex plugin directory, choose the Xcoder marketplace, and install the `xcode` plugin. In the CLI, open Codex and run `/plugins`.
+
+For local development, clone the repo anywhere:
+
+```bash
+git clone git@github.com:AmrMohamad/Xcoder.git
+cd Xcoder
 chmod +x bin/xcode
 bin/xcode --version
 bin/xcode doctor --json
 ```
 
-Register it in your local plugin marketplace without overwriting existing entries. A typical entry is:
+For an unpacked local checkout, use a marketplace entry with a `./`-prefixed path relative to that marketplace root:
 
 ```json
 {
   "name": "xcode",
-  "path": "/Users/amrmohamad/Developer/Xcoder",
+  "source": {
+    "source": "local",
+    "path": "./"
+  },
+  "policy": {
+    "installation": "AVAILABLE",
+    "authentication": "NONE"
+  },
   "category": "Developer Tools"
 }
 ```
 
-If your marketplace expects a relative path from `/Users/amrmohamad`, use:
-
-```json
-{
-  "name": "xcode",
-  "path": "./Developer/Xcoder",
-  "category": "Developer Tools"
-}
-```
-
-See [Installation](docs/installation.md) for cache install, validation, and optional Swift helper rebuild steps.
+This follows OpenAI's Codex plugin marketplace format: the plugin manifest lives at `.codex-plugin/plugin.json`, and local `source.path` values are relative to the marketplace root. See [Installation](docs/installation.md) for development, validation, packaging, and optional Swift helper rebuild steps.
 
 ## Quick Use
 
