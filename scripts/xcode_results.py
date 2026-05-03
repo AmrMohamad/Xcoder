@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -22,13 +23,16 @@ from xcode_common import (
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Summarize .xcresult bundles with xcresulttool.")
+    argv = sys.argv[1:]
+    if argv and argv[0] == "summarize":
+        argv = argv[1:]
     parser.add_argument("--path", required=True, help="Path to an .xcresult bundle.")
     parser.add_argument("--kind", choices=["test-summary", "build-results", "content-availability", "log"], default="test-summary")
     parser.add_argument("--log-type", default="build", choices=["build", "action", "console"])
     parser.add_argument("--timeout-seconds", type=int, default=120)
     parser.add_argument("--artifact-dir", default=None)
     parser.add_argument("--json", action="store_true", help="Emit JSON. Kept for CLI symmetry; JSON is always emitted.")
-    return parser.parse_args()
+    return parser.parse_args(argv)
 
 
 def command_for(kind: str, path: Path, log_type: str) -> list[str]:

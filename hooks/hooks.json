@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "/usr/bin/python3 -c 'import glob, os, runpy, sys; paths = glob.glob(os.path.expanduser(\"~/.codex/plugins/cache/*/xcode/0.3.0/scripts/xcode_gui_first_prompt_hook.py\")); sys.exit(\"xcode gui-first prompt hook not found\") if not paths else runpy.run_path(paths[0], run_name=\"__main__\")'",
+            "command": "/usr/bin/python3 -c 'import glob, os, runpy, sys; paths = glob.glob(os.path.expanduser(\"~/.codex/plugins/cache/*/xcode/0.4.0/scripts/xcode_gui_first_prompt_hook.py\")) or glob.glob(os.path.expanduser(\"~/.codex/plugins/cache/*/xcode/0.3.0/scripts/xcode_gui_first_prompt_hook.py\")); sys.exit(\"xcode gui-first prompt hook not found\") if not paths else runpy.run_path(paths[0], run_name=\"__main__\")'",
             "timeout": 5,
             "statusMessage": "Applying Xcode GUI-first routing"
           }
@@ -18,9 +18,22 @@
         "hooks": [
           {
             "type": "command",
-            "command": "/usr/bin/python3 -c 'import glob, os, runpy, sys; paths = glob.glob(os.path.expanduser(\"~/.codex/plugins/cache/*/xcode/0.3.0/scripts/xcode_gui_first_pre_tool_hook.py\")); sys.exit(\"xcode gui-first pre-tool hook not found\") if not paths else runpy.run_path(paths[0], run_name=\"__main__\")'",
+            "command": "/usr/bin/python3 -c 'import glob, os, runpy, sys; paths = glob.glob(os.path.expanduser(\"~/.codex/plugins/cache/*/xcode/0.4.0/scripts/xcode_gui_first_pre_tool_hook.py\")) or glob.glob(os.path.expanduser(\"~/.codex/plugins/cache/*/xcode/0.3.0/scripts/xcode_gui_first_pre_tool_hook.py\")); sys.exit(\"xcode gui-first pre-tool hook not found\") if not paths else runpy.run_path(paths[0], run_name=\"__main__\")'",
             "timeout": 5,
             "statusMessage": "Checking Xcode GUI-first routing"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "^mcp__xcode__|^Bash$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/usr/bin/python3 -c 'import glob, os, runpy, sys; paths = glob.glob(os.path.expanduser(\"~/.codex/plugins/cache/*/xcode/0.4.0/scripts/xcode_post_tool_hook.py\")) or glob.glob(os.path.expanduser(\"~/.codex/plugins/cache/*/xcode/0.3.0/scripts/xcode_post_tool_hook.py\")); sys.exit(0) if not paths else runpy.run_path(paths[0], run_name=\"__main__\")'",
+            "timeout": 3,
+            "statusMessage": "Recording Xcode plugin tool usage"
           }
         ]
       }

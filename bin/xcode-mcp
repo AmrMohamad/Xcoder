@@ -1,0 +1,183 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+EXEC="$ROOT/bin/xcode-mcp-server"
+MIN_MACOS_VERSION="14.0"
+ARTIFACT_ROOT="$ROOT/.codex/xcode/artifacts"
+
+version_ge() {
+  /usr/bin/awk -v current="$1" -v required="$2" '
+    BEGIN {
+      split(current, c, ".")
+      split(required, r, ".")
+      for (i = 1; i <= 3; i++) {
+        ci = c[i] + 0
+        ri = r[i] + 0
+        if (ci > ri) exit 0
+        if (ci < ri) exit 1
+      }
+      exit 0
+    }
+  '
+}
+
+timestamp_slug() {
+  /bin/date +"%Y%m%d-%H%M%S"
+}
+
+emit_bootstrap_envelope() {
+  local ok="$1"
+  local status="$2"
+  local error_type="$3"
+  local summary="$4"
+  local exit_code="$5"
+  local artifact_dir="$6"
+  local steps_file="$7"
+
+  /usr/bin/python3 - "$ok" "$status" "$error_type" "$summary" "$exit_code" "$ROOT" "$artifact_dir" "$steps_file" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+ok = sys.argv[1] == "true"
+status = sys.argv[2]
+error_type = sys.argv[3] or None
+summary = sys.argv[4]
+exit_code = int(sys.argv[5])
+root = sys.argv[6]
+artifact_dir = sys.argv[7]
+steps_file = Path(sys.argv[8])
+
+steps = []
+if steps_file.exists():
+    for line in steps_file.read_text(encoding="utf-8").splitlines():
+        name, code, stdout_path, stderr_path = line.split("\t", 3)
+        steps.append(
+            {
+                "name": name,
+                "ok": code == "0",
+                "exit_code": int(code),
+                "artifacts": {
+                    "stdout": stdout_path,
+                    "stderr": stderr_path,
+                },
+            }
+        )
+
+envelope = {
+    "schema_version": "xcode-plugin.v0.3",
+    "ok": ok,
+    "status": status,
+    "error_type": error_type,
+    "command_name": "mcp-bootstrap",
+    "summary": summary,
+    "artifacts": {
+        "artifact_dir": artifact_dir,
+    },
+    "warnings": [
+        "Restart Codex after bootstrap so .mcp.json is reloaded and mcp__xcode__* tools become visible."
+    ] if ok else [],
+    "errors": [] if ok else [summary],
+    "next_actions": [
+        "Restart Codex and verify the mcp__xcode__* namespace is visible."
+    ] if ok else [
+        "Inspect the artifact stdout/stderr files for the failed step.",
+        "Retry bin/xcode mcp bootstrap --json after fixing the local toolchain issue.",
+        "If it still fails, report compact redacted diagnostics at https://github.com/AmrMohamad/Xcoder/issues.",
+    ],
+    "details": {
+        "plugin_root": root,
+        "minimum_macos_version": "14.0",
+        "steps": steps,
+    },
+}
+print(json.dumps(envelope, indent=2, sort_keys=True))
+raise SystemExit(exit_code)
+PY
+}
+
+bootstrap() {
+  local json_output="false"
+  for arg in "$@"; do
+    if [[ "$arg" == "--json" ]]; then
+      json_output="true"
+    fi
+  done
+
+  local artifact_dir="$ARTIFACT_ROOT/$(timestamp_slug)-mcp-bootstrap-$$"
+  local steps_file="$artifact_dir/steps.tsv"
+  /bin/mkdir -p "$artifact_dir"
+  : > "$steps_file"
+
+  run_step() {
+    local name="$1"
+    shift
+    local stdout_file="$artifact_dir/${name}.stdout.txt"
+    local stderr_file="$artifact_dir/${name}.stderr.txt"
+    set +e
+    "$@" >"$stdout_file" 2>"$stderr_file"
+    local code="$?"
+    set -e
+    /usr/bin/printf '%s\t%s\t%s\t%s\n' "$name" "$code" "$stdout_file" "$stderr_file" >> "$steps_file"
+    return "$code"
+  }
+
+  fail_bootstrap() {
+    local code="$1"
+    local summary="$2"
+    if [[ "$json_output" == "true" ]]; then
+      emit_bootstrap_envelope "false" "failure" "mcp_bootstrap_failed" "$summary" "$code" "$artifact_dir" "$steps_file"
+    fi
+    echo "$summary" >&2
+    exit "$code"
+  }
+
+  run_step "plugin-json" /usr/bin/python3 -m json.tool "$ROOT/.codex-plugin/plugin.json" || fail_bootstrap 2 "Plugin manifest JSON is invalid."
+  run_step "mcp-json" /usr/bin/python3 -m json.tool "$ROOT/.mcp.json" || fail_bootstrap 2 "MCP config JSON is invalid."
+  run_step "python-compile" /usr/bin/python3 -m py_compile "$ROOT"/scripts/*.py || fail_bootstrap 2 "Python command modules did not compile."
+  run_step "chmod-public-bin" /bin/chmod +x "$ROOT/bin/xcode" "$ROOT/bin/xcode-mcp" || fail_bootstrap 4 "Could not make public plugin launchers executable."
+  run_step "host-macos-version" /usr/bin/sw_vers -productVersion || fail_bootstrap 64 "Could not read the host macOS version."
+  if ! version_ge "$CURRENT_MACOS_VERSION" "$MIN_MACOS_VERSION"; then
+    fail_bootstrap 64 "xcode-mcp-server requires macOS $MIN_MACOS_VERSION or newer; current macOS is ${CURRENT_MACOS_VERSION:-unknown}."
+  fi
+  run_step "xcode-select" /usr/bin/xcode-select -p || fail_bootstrap 2 "xcode-select does not point at an available developer directory."
+  run_step "swift-version" /usr/bin/swift --version || fail_bootstrap 2 "Swift toolchain is not available."
+  run_step "swift-package-resolve" /usr/bin/swift package resolve --package-path "$ROOT/native/XcodeMCPServer" || fail_bootstrap 2 "SwiftPM could not resolve the bundled MCP server package."
+  run_step "swift-build-release" /usr/bin/swift build -c release --package-path "$ROOT/native/XcodeMCPServer" || fail_bootstrap 2 "SwiftPM could not build the bundled MCP server."
+  run_step "install-mcp-server" /usr/bin/install -m 755 "$ROOT/native/XcodeMCPServer/.build/release/xcode-mcp-server" "$EXEC" || fail_bootstrap 4 "Could not install the MCP server binary into bin/."
+  run_step "mcp-version" "$EXEC" --version --json || fail_bootstrap 60 "Built MCP server did not return version JSON."
+  run_step "mcp-doctor" "$EXEC" --doctor --json || fail_bootstrap 60 "Built MCP server self-doctor failed."
+  run_step "mcp-list-tools" "$EXEC" --list-tools --json || fail_bootstrap 60 "Built MCP server did not list tools."
+  run_step "plugin-doctor" "$ROOT/bin/xcode" doctor --json || fail_bootstrap 60 "Plugin doctor failed after MCP bootstrap."
+
+  if [[ "$json_output" == "true" ]]; then
+    emit_bootstrap_envelope "true" "success" "" "Xcoder MCP server is built, executable, and locally validated." 0 "$artifact_dir" "$steps_file"
+    return 0
+  fi
+  echo "Xcoder MCP server is built, executable, and locally validated."
+}
+
+if [[ "$(/usr/bin/uname -s)" != "Darwin" ]]; then
+  echo "xcode-mcp-server requires macOS $MIN_MACOS_VERSION or newer" >&2
+  exit 64
+fi
+
+CURRENT_MACOS_VERSION="$(/usr/bin/sw_vers -productVersion 2>/dev/null || true)"
+if [[ -z "$CURRENT_MACOS_VERSION" ]] || ! version_ge "$CURRENT_MACOS_VERSION" "$MIN_MACOS_VERSION"; then
+  echo "xcode-mcp-server requires macOS $MIN_MACOS_VERSION or newer; current macOS is ${CURRENT_MACOS_VERSION:-unknown}" >&2
+  exit 64
+fi
+
+if [[ "${1:-}" == "--bootstrap" || "${1:-}" == "bootstrap" ]]; then
+  shift
+  bootstrap "$@"
+  exit $?
+fi
+
+if [[ ! -x "$EXEC" ]]; then
+  echo "xcode-mcp-server is not built at $EXEC; run $ROOT/bin/xcode mcp bootstrap --json before starting MCP stdio." >&2
+  exit 60
+fi
+
+exec "$EXEC" "$@"

@@ -2,7 +2,34 @@
 
 Use this page to choose the right Xcoder path.
 
-When a user explicitly mentions `@xcode`, `xcode@local`, or any bundled `xcode-*` skill, use GUI-first routing. Start by proving Xcode.app state, then drive Xcode through `bin/xcode ide ...` whenever possible. Use `bin/xcode build ...` only as plugin-routed fallback/support after explaining why GUI control cannot satisfy the task, or when the user explicitly asks for CLI/headless validation.
+When a user explicitly mentions `@xcode`, `xcode@local`, any bundled `xcode-*` skill, or the `xcode` MCP namespace, use GUI-first routing. Prefer callable MCP tools when available, then `bin/xcode` plugin commands. Use `bin/xcode build ...` only as plugin-routed fallback/support after explaining why GUI control cannot satisfy the task, or when the user explicitly asks for CLI/headless validation.
+
+If this is the first use of the plugin, or the `mcp__xcode__*` namespace is missing, run the one-action first-use MCP bootstrap before normal workflows:
+
+```bash
+bin/xcode mcp bootstrap --json
+```
+
+Then restart Codex. If that still fails after repair, report the problem at [AmrMohamad/Xcoder issues](https://github.com/AmrMohamad/Xcoder/issues) with compact redacted diagnostics.
+
+## Callable MCP Tools
+
+Expected tool names after Codex reload:
+
+```text
+mcp__xcode__xcode_doctor
+mcp__xcode__xcode_native_state
+mcp__xcode__xcode_native_windows
+mcp__xcode__xcode_ide_preflight
+mcp__xcode__xcode_ide_build
+mcp__xcode__xcode_ide_run
+mcp__xcode__xcode_run_app
+mcp__xcode__xcode_simulator_resolve
+mcp__xcode__xcode_results_summary
+mcp__xcode__xcode_warnings_summary
+```
+
+These tools are wrappers over `bin/xcode`. They are the primary discovery surface, not a separate Xcode implementation.
 
 ## Read Project Context First
 
@@ -24,9 +51,11 @@ bin/xcode native ax xcode-windows --json
 bin/xcode ide status --json
 bin/xcode ide list-workspaces --json
 bin/xcode ide workspace-info --workspace-path /path/to/App.xcodeproj --json
+bin/xcode ide preflight --workspace-path /path/to/App.xcodeproj --scheme 'App (Debug)' --destination-id <UDID> --json
 bin/xcode context --path /path/to/App.xcodeproj --scheme 'App (Debug)' --json
 bin/xcode simulator resolve --name "iPhone SE (3rd generation)" --runtime "iOS 18.5" --json
 bin/xcode ide scheme-action --workspace-path /path/to/App.xcodeproj --action build --scheme 'App (Debug)' --destination-id <UDID> --timeout-seconds 300 --json
+bin/xcode workflow run-app --project-path /path/to/App.xcodeproj --scheme 'App (Debug)' --destination-id <UDID> --json
 ```
 
 Do not bypass Xcoder with bare `xcodebuild`, `xcrun simctl`, `simctl`, `xcresulttool`, `osascript`, `open -a Xcode`, or `xcode-cli-shared-cache-build`.
@@ -99,8 +128,8 @@ Name aliases are convenience only. They must resolve uniquely first.
 ## Results
 
 ```bash
-bin/xcode results test-summary --xcresult /path/to/result.xcresult --json
-bin/xcode results build-summary --xcresult /path/to/result.xcresult --json
+bin/xcode results summarize --path /path/to/result.xcresult --kind test-summary --json
+bin/xcode results summarize --path /path/to/result.xcresult --kind build-results --json
 ```
 
 Missing or corrupt bundles map to typed result errors instead of generic subprocess failure.
@@ -121,6 +150,7 @@ Use IDE automation first when `@xcode` is explicitly mentioned:
 bin/xcode ide status --json
 bin/xcode ide list-workspaces --json
 bin/xcode ide workspace-info --workspace-path /path/to/App.xcodeproj --json
+bin/xcode ide preflight --workspace-path /path/to/App.xcodeproj --scheme App --destination-id <UDID> --json
 bin/xcode ide set-scheme --workspace-path /path/to/App.xcodeproj --scheme App --json
 bin/xcode ide scheme-action --workspace-path /path/to/App.xcodeproj --action test --scheme App --destination-id <UDID> --timeout-seconds 300 --json
 ```

@@ -471,6 +471,100 @@ end tell
     return finish_from_osascript(result=run_osascript(script), success_summary="Active Xcode workspace inspected")
 
 
+def preflight_command(
+    *,
+    workspace_path: str | None = None,
+    scheme: str | None = None,
+    destination_name: str | None = None,
+    destination_id: str | None = None,
+    require_native_preflight: bool = False,
+) -> int:
+    preflight_exit, preflight_warnings, preflight_details = native_preflight(require=require_native_preflight, include_ax=True)
+    if preflight_exit is not None:
+        return preflight_exit
+    selector = workspace_selector_script(workspace_path)
+    scheme_line = f"set requestedScheme to {apple_string(scheme or '')}"
+    destination_name_line = f"set requestedDestinationName to {apple_string(destination_name or '')}"
+    destination_id_line = f"set requestedDestinationId to {apple_string(destination_id or '')}"
+    script = f"""
+tell application "Xcode"
+    {selector}
+    {scheme_line}
+    {destination_name_line}
+    {destination_id_line}
+    set out to "workspace_name\t" & (name of w as text) & linefeed
+    set out to out & "workspace_loaded\t" & ((loaded of w) as text) & linefeed
+    try
+        set out to out & "workspace_path\t" & (POSIX path of (file of w as alias)) & linefeed
+    end try
+
+    set schemeFound to false
+    if requestedScheme is "" then
+        try
+            set out to out & "active_scheme\t" & (name of active scheme of w as text) & linefeed
+            set schemeFound to true
+        end try
+    else
+        repeat with s in schemes of w
+            if (name of s as text) is requestedScheme then set schemeFound to true
+        end repeat
+        set out to out & "requested_scheme\t" & requestedScheme & linefeed
+    end if
+    set out to out & "scheme_available\t" & (schemeFound as text) & linefeed
+    if schemeFound is false then error "XCODE_PLUGIN_SCHEME_NOT_FOUND"
+
+    set destinationFound to false
+    set destinationMatchCount to 0
+    if requestedDestinationName is "" and requestedDestinationId is "" then
+        try
+            set d to active run destination of w
+            set out to out & "active_destination_name\t" & (name of d as text) & linefeed
+            set out to out & "active_destination_platform\t" & (platform of d as text) & linefeed
+            set destinationFound to true
+            set destinationMatchCount to 1
+        end try
+    else
+        repeat with d in run destinations of w
+            set nameMatches to false
+            set idMatches to false
+            try
+                if requestedDestinationId is not "" and (device identifier of device of d as text) is requestedDestinationId then set idMatches to true
+            end try
+            try
+                if requestedDestinationId is "" and requestedDestinationName is not "" and (name of d as text) is requestedDestinationName then set nameMatches to true
+            end try
+            if idMatches or nameMatches then
+                set destinationFound to true
+                set destinationMatchCount to destinationMatchCount + 1
+                try
+                    set out to out & "matched_destination_name\t" & (name of d as text) & linefeed
+                end try
+                try
+                    set out to out & "matched_destination_platform\t" & (platform of d as text) & linefeed
+                end try
+            end if
+        end repeat
+    end if
+    set out to out & "destination_available\t" & (destinationFound as text) & linefeed
+    set out to out & "destination_match_count\t" & (destinationMatchCount as text) & linefeed
+    if destinationMatchCount is 0 then error "XCODE_PLUGIN_DESTINATION_NOT_FOUND"
+    if destinationMatchCount > 1 then error "XCODE_PLUGIN_DESTINATION_AMBIGUOUS"
+    return out
+end tell
+"""
+    return finish_from_osascript(
+        result=run_osascript(script),
+        success_summary="Xcode IDE preflight completed",
+        failure_summary="Xcode IDE preflight failed",
+        extra_warnings=preflight_warnings,
+        extra_data={"native_preflight": preflight_details} if preflight_details else None,
+        next_actions=[
+            "Resolve any modal blockers before running IDE actions.",
+            "Pass explicit scheme and destination identifiers when multiple workspaces or destinations are open.",
+        ],
+    )
+
+
 def list_schemes_command(workspace_path: str | None = None) -> int:
     selector = workspace_selector_script(workspace_path)
     script = f"""
@@ -834,6 +928,13 @@ def parse_args() -> argparse.Namespace:
     workspace_info = subparsers.add_parser("workspace-info", help="Inspect an Xcode workspace document.")
     workspace_info.add_argument("--workspace-path", default=None)
 
+    preflight = subparsers.add_parser("preflight", help="Validate Xcode IDE readiness before scheme actions.")
+    preflight.add_argument("--workspace-path", default=None)
+    preflight.add_argument("--scheme", default=None)
+    preflight.add_argument("--destination-name", default=None)
+    preflight.add_argument("--destination-id", default=None)
+    preflight.add_argument("--require-native-preflight", action="store_true")
+
     subparsers.add_parser("list-workspaces", help="List open Xcode workspace documents.")
 
     open_parser = subparsers.add_parser("open-workspace", help="Open an .xcodeproj or .xcworkspace in Xcode.")
@@ -880,6 +981,14 @@ def main() -> int:
         return open_workspace_command(args.path, args.timeout_seconds)
     if args.command == "workspace-info":
         return workspace_info_command(args.workspace_path)
+    if args.command == "preflight":
+        return preflight_command(
+            workspace_path=args.workspace_path,
+            scheme=args.scheme,
+            destination_name=args.destination_name,
+            destination_id=args.destination_id,
+            require_native_preflight=args.require_native_preflight,
+        )
     if args.command == "list-workspaces":
         return list_workspaces_command()
     if args.command == "list-schemes":

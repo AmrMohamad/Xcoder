@@ -16,6 +16,7 @@ EXCLUDED_DIR_NAMES = {
     "__MACOSX",
     "__pycache__",
     ".build",
+    ".swiftpm",
     "DerivedData",
 }
 
@@ -38,11 +39,32 @@ EXCLUDED_PARTS = {
 }
 
 REQUIRED_PACKAGE_FILES = {
+    ".mcp.json",
     "bin/xcode",
+    "bin/xcode-mcp",
+    "bin/xcode-mcp-server",
     "bin/xcode-native-helper",
+    "native/XcodeMCPServer/Package.swift",
+    "native/XcodeMCPServer/Package.resolved",
+    "native/XcodeMCPServer/Sources/XcodeMCPServer/ArgumentValues.swift",
+    "native/XcodeMCPServer/Sources/XcodeMCPServer/Constants.swift",
+    "native/XcodeMCPServer/Sources/XcodeMCPServer/JSONEnvelope.swift",
+    "native/XcodeMCPServer/Sources/XcodeMCPServer/ProcessExecutor.swift",
+    "native/XcodeMCPServer/Sources/XcodeMCPServer/ServerIntrospection.swift",
+    "native/XcodeMCPServer/Sources/XcodeMCPServer/XcodeBridge.swift",
+    "native/XcodeMCPServer/Sources/XcodeMCPServer/XcodeMCPServer.swift",
+    "native/XcodeMCPServer/Sources/XcodeMCPServer/XcodeToolArguments.swift",
+    "native/XcodeMCPServer/Sources/XcodeMCPServer/XcodeToolCatalog.swift",
+    "native/XcodeMCPServer/Sources/XcodeMCPServer/XcodeToolError.swift",
+    "scripts/xcode_post_tool_hook.py",
 }
 
-REQUIRED_EXECUTABLE_FILES = REQUIRED_PACKAGE_FILES
+REQUIRED_EXECUTABLE_FILES = {
+    "bin/xcode",
+    "bin/xcode-mcp",
+    "bin/xcode-mcp-server",
+    "bin/xcode-native-helper",
+}
 
 
 def parse_args() -> argparse.Namespace:
@@ -153,7 +175,7 @@ def zip_command(output: str) -> int:
 def bad_archive_reason(name: str) -> str | None:
     path = Path(name)
     parts = path.parts
-    if any(part in {"__MACOSX", "__pycache__", ".build", "DerivedData"} for part in parts):
+    if any(part in {"__MACOSX", "__pycache__", ".build", ".swiftpm", "DerivedData"} for part in parts):
         return "excluded directory in archive"
     if any(part == ".DS_Store" for part in parts):
         return "excluded file in archive"
@@ -162,7 +184,7 @@ def bad_archive_reason(name: str) -> str | None:
             return "transient artifact path in archive"
     if len(parts) >= 3 and parts[-3:] == (".codex", "xcode", "artifacts"):
         return "transient artifact path in archive"
-    if path.suffix == ".zip":
+    if path.suffix in {".zip", ".pyc", ".pyo"}:
         return "nested zip in archive"
     if path.name.endswith(".zip.manifest.json"):
         return "package sidecar in archive"

@@ -42,12 +42,31 @@ REQUIRED_SDEF_TERMS = [
 ]
 
 REQUIRED_SIMCTL_TERMS = ["boot", "install", "launch", "terminate", "io", "list", "shutdown"]
+MINIMUM_NATIVE_MACOS_VERSION = "14.0"
+ISSUES_URL = "https://github.com/AmrMohamad/Xcoder/issues"
+
+
+def parse_version(value: str) -> tuple[int, int, int]:
+    parts = []
+    for part in value.strip().split(".")[:3]:
+        try:
+            parts.append(int(part))
+        except ValueError:
+            parts.append(0)
+    while len(parts) < 3:
+        parts.append(0)
+    return tuple(parts)  # type: ignore[return-value]
+
+
+def version_at_least(current: str, minimum: str) -> bool:
+    return parse_version(current) >= parse_version(minimum)
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Validate the local Xcode toolchain and xcode plugin assumptions.")
     parser.add_argument("--json", action="store_true", help="Emit JSON. Kept for CLI symmetry; JSON is always emitted.")
     parser.add_argument("--strict", action="store_true", help="Treat optional IDE automation warnings as failures.")
+    parser.add_argument("--checks", default=None, help="Optional comma-separated check names requested by MCP callers; currently informational.")
     parser.add_argument("--artifact-dir", default=None, help="Reserved for future doctor artifacts.")
     return parser.parse_args()
 
@@ -94,6 +113,8 @@ def file_sha256(path: Path) -> str:
 def helper_identity_details(helper: Path) -> dict[str, Any]:
     archs = run_command(["lipo", "-archs", str(helper)], timeout_seconds=10)
     codesign = run_command(["codesign", "-dv", str(helper)], timeout_seconds=10)
+    spctl = run_command(["spctl", "-a", "-vv", str(helper)], timeout_seconds=10)
+    build_version = run_command(["vtool", "-show-build", str(helper)], timeout_seconds=10)
     quarantine = run_command(["xattr", "-p", "com.apple.quarantine", str(helper)], timeout_seconds=10)
     codesign_text = compact_output(codesign["stdout"] + codesign["stderr"], 2000)
     return {
@@ -104,6 +125,16 @@ def helper_identity_details(helper: Path) -> dict[str, Any]:
             "present": codesign["exit_code"] == 0,
             "adhoc": "Signature=adhoc" in codesign_text or "Signature=Ad Hoc" in codesign_text,
             "output": codesign_text,
+        },
+        "spctl": {
+            "exit_code": spctl["exit_code"],
+            "accepted": spctl["exit_code"] == 0,
+            "output": compact_output(spctl["stdout"] + spctl["stderr"], 1200),
+            "local_rejection_is_expected": spctl["exit_code"] != 0,
+        },
+        "mach_o_build_version": {
+            "exit_code": build_version["exit_code"],
+            "output": compact_output(build_version["stdout"] + build_version["stderr"], 1200),
         },
         "quarantine_xattr_present": quarantine["exit_code"] == 0,
         "same_binary_invoked_by_native_adapter": True,
@@ -193,11 +224,64 @@ def add_native_helper_checks(checks: list[dict[str, Any]], warnings: list[str], 
     add_check(checks, name="native-helper-xcode-state", status=state_status, **state_details)
 
 
+def add_mcp_server_checks(checks: list[dict[str, Any]], warnings: list[str]) -> None:
+    root = plugin_root()
+    binary = root / "bin" / "xcode-mcp-server"
+    if not binary.exists() or not (binary.stat().st_mode & 0o111):
+        warnings.append("Bundled MCP server binary is not currently built at bin/xcode-mcp-server.")
+        add_check(checks, name="mcp-server-binary-present", status="failed", path=str(binary))
+        return
+
+    add_check(checks, name="mcp-server-binary-signing", status="ok", **helper_identity_details(binary))
+    doctor = run_command([str(binary), "--doctor", "--json"], timeout_seconds=20)
+    try:
+        doctor_json = json.loads(doctor["stdout"])
+    except json.JSONDecodeError:
+        add_check(
+            checks,
+            name="mcp-server-self-doctor",
+            status="failed",
+            exit_code=doctor["exit_code"],
+            output=compact_output(doctor["stdout"] + doctor["stderr"], 1600),
+        )
+        return
+    for item in doctor_json.get("checks", []):
+        if isinstance(item, dict) and item.get("name"):
+            checks.append(item)
+
+
+def add_macos_support_check(checks: list[dict[str, Any]], warnings: list[str]) -> None:
+    if platform.system() != "Darwin":
+        add_check(
+            checks,
+            name="host-macos-minimum",
+            status="failed",
+            current_system=platform.system(),
+            minimum_macos_version=MINIMUM_NATIVE_MACOS_VERSION,
+        )
+        return
+    result = run_command(["sw_vers", "-productVersion"], timeout_seconds=10)
+    current = result["stdout"].strip()
+    supported = result["exit_code"] == 0 and version_at_least(current, MINIMUM_NATIVE_MACOS_VERSION)
+    add_check(
+        checks,
+        name="host-macos-minimum",
+        status="ok" if supported else "failed",
+        exit_code=result["exit_code"],
+        current_macos_version=current or None,
+        minimum_macos_version=MINIMUM_NATIVE_MACOS_VERSION,
+        rationale="Swift native helper and bundled MCP server are built for macOS 14 or newer.",
+    )
+    if not supported:
+        warnings.append(f"Xcoder native binaries require macOS {MINIMUM_NATIVE_MACOS_VERSION} or newer.")
+
+
 def main() -> int:
     args = parse_args()
     checks: list[dict[str, Any]] = []
     warnings: list[str] = []
     identity = plugin_identity()
+    requested_checks = [item.strip() for item in (args.checks or "").split(",") if item.strip()]
     if identity["compatibility_cache_alias"]:
         warnings.append("cache_version_alias: manifest version differs from cache path version.")
 
@@ -219,6 +303,7 @@ def main() -> int:
             "release": platform.release(),
         },
     )
+    add_macos_support_check(checks, warnings)
 
     select_result = run_command(["xcode-select", "-p"], timeout_seconds=20)
     developer_dir = select_result["stdout"].strip() if select_result["exit_code"] == 0 else None
@@ -348,11 +433,13 @@ def main() -> int:
         warnings.append("Apple mcpbridge is optional and currently unavailable; plugin will use local scripts instead.")
 
     add_native_helper_checks(checks, warnings, xcode_app)
+    add_mcp_server_checks(checks, warnings)
 
     failed = [item["name"] for item in checks if item["status"] == "failed"]
     details = {
         **identity,
         "checks": checks,
+        "requested_checks": requested_checks,
         "selected_developer_dir": developer_dir,
         "selected_xcode_app": xcode_app,
     }
@@ -366,6 +453,7 @@ def main() -> int:
             errors=failed,
             next_actions=[
                 "Fix failed required toolchain checks before relying on xcode build workflows.",
+                f"If first-use MCP bootstrap still fails after repair, report it at {ISSUES_URL} with compact redacted diagnostics.",
                 "Use --strict only when IDE automation readiness should be required.",
             ],
             exit_code=EXIT_CODES["subprocess_failed"],
@@ -376,6 +464,7 @@ def main() -> int:
         details=details,
         warnings=warnings,
         next_actions=[
+            "If mcp__xcode__* tools are not visible, run the first-use MCP bootstrap and restart Codex.",
             "Use xcode build for deterministic CLI builds/tests.",
             "Use xcode ide only when Xcode window state matters.",
         ],

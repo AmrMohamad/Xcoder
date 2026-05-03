@@ -13,11 +13,13 @@ When the user explicitly mentions `@xcode`, `xcode@local`, or any bundled `xcode
 
 In GUI-first mode:
 
+- If this is first use, or if `mcp__xcode__*` tools are missing, activate `xcode-first-use` and bootstrap the bundled Swift MCP server before normal Xcode work.
 - Start with Xcode.app evidence through `bin/xcode native ...` and `bin/xcode ide ...`.
 - Prefer `bin/xcode ide scheme-action` for build, test, run, debug, and stop.
 - Use `bin/xcode build` only as plugin-routed fallback/support after explaining why GUI control cannot satisfy the task, or when the user explicitly asks for CLI/headless validation.
 - Do not run bare `xcodebuild`, `xcrun simctl`, `simctl`, `xcresulttool`, `osascript`, `open -a Xcode`, or old `xcode-cli-shared-cache-build`.
 - If the plugin lacks the needed GUI command, say that plainly and propose the plugin command that should be added.
+- If first-use MCP bootstrap still fails after local repair, report the failure at `https://github.com/AmrMohamad/Xcoder/issues` with compact redacted diagnostics.
 
 ## Decision Table
 

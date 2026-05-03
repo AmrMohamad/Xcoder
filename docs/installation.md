@@ -4,6 +4,15 @@ This plugin is designed to install through a Codex plugin marketplace, run from 
 
 The repository root is the plugin root. It must contain `.codex-plugin/plugin.json`, `skills/`, `bin/xcode`, and the supporting scripts/assets.
 
+## Requirements
+
+The Swift native helper and bundled Swift MCP server require macOS 14.0 or newer. This is enforced in two places:
+
+- `bin/xcode-mcp` checks `sw_vers -productVersion` before launching `bin/xcode-mcp-server`.
+- `bin/xcode doctor --json` reports `host-macos-minimum`, and the MCP server reports `mcp-server-minimum-macos` plus `mcp-server-host-macos-supported`.
+
+Older macOS hosts should fail early with a clear message instead of trying to launch an incompatible Swift binary.
+
 ## Install From GitHub Marketplace
 
 The repository includes a marketplace file at `.agents/plugins/marketplace.json`. Add that marketplace to Codex:
@@ -36,6 +45,20 @@ bin/xcode --version
 bin/xcode doctor --json
 ```
 
+## First-Use MCP Bootstrap
+
+When Codex uses this plugin for the first time, it must make the bundled MCP server usable before relying on Xcode workflows. The required path is:
+
+```bash
+bin/xcode mcp bootstrap --json
+```
+
+That single action validates `.codex-plugin/plugin.json` and `.mcp.json`, compiles `scripts/*.py`, builds `native/XcodeMCPServer`, installs `bin/xcode-mcp-server`, makes `bin/xcode`, `bin/xcode-mcp`, and `bin/xcode-mcp-server` executable, runs MCP self-checks, and runs `bin/xcode doctor --json`.
+
+Then restart Codex so `.mcp.json` is reloaded.
+
+Use the complete runbook in [First-Use MCP Bootstrap](first-use-mcp.md). If this still fails after local repair, report it at [AmrMohamad/Xcoder issues](https://github.com/AmrMohamad/Xcoder/issues) with compact redacted diagnostics.
+
 ## Local Marketplace Registration
 
 For an unpacked checkout, add or update a marketplace file such as `$REPO_ROOT/.agents/plugins/marketplace.json` or a personal marketplace file. Keep existing marketplace entries and add one plugin object:
@@ -63,7 +86,7 @@ Codex installs plugins into its plugin cache. For local development, prefer rein
 
 ```bash
 SOURCE="$(pwd)"
-CACHE="${CODEX_HOME:-$HOME/.codex}/plugins/cache/local/xcode/0.3.0"
+CACHE="${CODEX_HOME:-$HOME/.codex}/plugins/cache/local/xcode/0.4.0"
 
 mkdir -p "$CACHE"
 rsync -a --delete \
@@ -71,6 +94,7 @@ rsync -a --delete \
   --exclude "__pycache__" \
   --exclude ".DS_Store" \
   --exclude ".build" \
+  --exclude ".swiftpm" \
   --exclude ".codex/xcode/artifacts" \
   "$SOURCE/" "$CACHE/"
 
@@ -102,19 +126,36 @@ bin/xcode native app xcode-state --json
 
 `native permissions status` does not trigger a macOS prompt. `native permissions request` is the explicit command that asks macOS to show the Accessibility permission prompt.
 
+## Bundled MCP Server
+
+Xcoder v0.4.0 ships a Swift stdio MCP server. Build it once and copy the release binary into `bin/`:
+
+```bash
+swift build -c release --package-path native/XcodeMCPServer
+cp native/XcodeMCPServer/.build/release/xcode-mcp-server bin/xcode-mcp-server
+chmod +x bin/xcode-mcp bin/xcode-mcp-server
+bin/xcode-mcp-server --version --json
+bin/xcode-mcp-server --list-tools --json
+bin/xcode-mcp-server --doctor --json
+```
+
+`.mcp.json` points Codex at `./bin/xcode-mcp`, which is only a wrapper around the built `bin/xcode-mcp-server`. Do not point `.mcp.json` at `swift run`; that makes tool startup slow and dependent on local build state.
+
+The wrapper also enforces the macOS 14.0 minimum before it executes the Swift binary.
+
 ## Package Install
 
 Create a clean zip from the repository root:
 
 ```bash
-bin/xcode package zip --output /tmp/xcode-plugin-0.3.0.zip --json
-bin/xcode package audit --zip /tmp/xcode-plugin-0.3.0.zip --json
+bin/xcode package zip --output /tmp/xcode-plugin-0.4.0.zip --json
+bin/xcode package audit --zip /tmp/xcode-plugin-0.4.0.zip --json
 ```
 
 The package command writes entries under:
 
 ```text
-xcode/0.3.0/
+xcode/0.4.0/
 ```
 
 The audit fails if the archive contains macOS metadata, Python caches, Swift `.build` output, local artifacts, nested zips, wrong root prefixes, missing package manifest, missing public binaries, or non-executable public binaries.
@@ -127,4 +168,6 @@ Xcoder follows the Codex plugin structure documented by OpenAI:
 - Marketplace files live at `.agents/plugins/marketplace.json` for repo-scoped catalogs or in a personal marketplace location.
 - Local marketplace entries use `source: { "source": "local", "path": "./..." }`.
 - Git-backed marketplace entries can use `source: "url"` when the plugin lives at the repository root.
-- Manifest paths such as `skills` and `logo` stay relative to the plugin root and start with `./`.
+- Manifest paths such as `skills`, `hooks`, `mcpServers`, and `logo` stay relative to the plugin root and start with `./`.
+- `.mcp.json` uses Codex's MCP config shape: `{"mcpServers": {"xcode": {"command": "./bin/xcode-mcp", "args": ["--stdio"]}}}`.
+- When a local cache version is replaced, make sure any personal local marketplace entry no longer points at the old deleted cache directory.

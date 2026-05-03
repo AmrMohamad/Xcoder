@@ -22,6 +22,15 @@ COMMAND_TO_SCRIPT = {
     "context": "xcode_context.py",
     "native": "xcode_native.py",
     "package": "xcode_package.py",
+    "workflow": "xcode_workflow.py",
+}
+
+MCP_SUBCOMMAND_TO_ARGS = {
+    "bootstrap": ["--bootstrap"],
+    "doctor": ["--doctor"],
+    "list-tools": ["--list-tools"],
+    "version": ["--version"],
+    "stdio": ["--stdio"],
 }
 
 
@@ -32,7 +41,7 @@ def parser() -> argparse.ArgumentParser:
     )
     root.add_argument("--version", action="store_true", help="Print the xcode plugin version and exit.")
     root.add_argument("--json", action="store_true", help="Emit a JSON envelope for root commands such as --version.")
-    root.add_argument("command", nargs="?", choices=sorted(COMMAND_TO_SCRIPT), help="Workflow command to run.")
+    root.add_argument("command", nargs="?", choices=sorted([*COMMAND_TO_SCRIPT, "mcp"]), help="Workflow command to run.")
     root.add_argument("args", nargs=argparse.REMAINDER, help="Arguments for the selected command.")
     return root
 
@@ -51,6 +60,28 @@ def main() -> int:
     if not args.command:
         parser().print_help()
         return 0
+
+    if args.command == "mcp":
+        forwarded = list(args.args)
+        if not forwarded:
+            return emit_failure(
+                "mcp",
+                "usage_error",
+                "Use: bin/xcode mcp bootstrap|doctor|list-tools|version|stdio [--json]",
+                exit_code=EXIT_CODES["usage_error"],
+            )
+        subcommand = forwarded[0]
+        if subcommand not in MCP_SUBCOMMAND_TO_ARGS:
+            return emit_failure(
+                "mcp",
+                "usage_error",
+                f"Unknown mcp subcommand: {subcommand}",
+                details={"valid_subcommands": sorted(MCP_SUBCOMMAND_TO_ARGS)},
+                exit_code=EXIT_CODES["usage_error"],
+            )
+        wrapper = plugin_root() / "bin" / "xcode-mcp"
+        completed = subprocess.run([str(wrapper), *MCP_SUBCOMMAND_TO_ARGS[subcommand], *forwarded[1:]])
+        return completed.returncode
 
     script_name = COMMAND_TO_SCRIPT[args.command]
     if args.command == "build" and any(item in {"-h", "--help"} for item in args.args):

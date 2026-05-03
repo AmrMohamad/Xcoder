@@ -2,9 +2,17 @@
 
 ![Xcoder local Xcode workflow diagram](docs/images/xcoder-hero.png)
 
-Xcoder is a GUI-first Codex plugin for Xcode workflows. When users explicitly mention `@xcode`, Codex should inspect and control Xcode.app first through `bin/xcode native ...` and `bin/xcode ide ...`, then use plugin-routed CLI support only when GUI control cannot answer the task or the user explicitly asks for headless validation.
+Xcoder is a GUI-first Codex plugin for Xcode workflows. When users explicitly mention `@xcode`, Codex should inspect and control Xcode.app first through callable MCP tools or `bin/xcode native ...` and `bin/xcode ide ...`, then use plugin-routed CLI support only when GUI control cannot answer the task or the user explicitly asks for headless validation.
 
-It does not depend on XcodeBuildMCP. It uses Apple tools directly: `xcodebuild`, `xcrun simctl`, `xcrun xcresulttool`, `osascript`/JXA, Xcode scripting, and a small optional Swift helper for native app state and read-only Accessibility inspection.
+It does not depend on XcodeBuildMCP. The bundled Swift MCP server is a thin façade over `bin/xcode`; `bin/xcode` and the Python scripts remain the source of truth. The plugin uses Apple tools only behind that plugin boundary: `xcodebuild`, `xcrun simctl`, `xcrun xcresulttool`, `osascript`/JXA, Xcode scripting, and a small optional Swift helper for native app state and read-only Accessibility inspection.
+
+## Requirements
+
+- macOS 14.0 or newer for the bundled Swift native helper and Swift MCP server.
+- Xcode command line tools selected through `xcode-select`.
+- Codex restart after installing or refreshing the plugin so `.mcp.json` is reloaded.
+
+`bin/xcode-mcp` checks the host macOS version before launching `bin/xcode-mcp-server`. On older macOS it exits with a clear message instead of letting the Swift binary fail opaquely.
 
 ## Install
 
@@ -46,6 +54,16 @@ For an unpacked local checkout, use a marketplace entry with a `./`-prefixed pat
 
 This follows OpenAI's Codex plugin marketplace format: the plugin manifest lives at `.codex-plugin/plugin.json`, and local `source.path` values are relative to the marketplace root. See [Installation](docs/installation.md) for development, validation, packaging, and optional Swift helper rebuild steps.
 
+## First-Use MCP Bootstrap
+
+On first use, or whenever Codex does not show `mcp__xcode__*` tools, Codex must bootstrap the bundled Swift MCP server before using raw Xcode terminal workflows:
+
+```bash
+bin/xcode mcp bootstrap --json
+```
+
+Then quit and reopen Codex, and start a new thread so MCP tools are loaded from the refreshed process state. If `bin/xcode-mcp --list-tools --json` works but `mcp__xcode__*` is still missing, check `codex mcp list` and the local marketplace entry that points to the installed plugin cache. If bootstrap still fails after local repair, report the failure at [AmrMohamad/Xcoder issues](https://github.com/AmrMohamad/Xcoder/issues) with compact redacted diagnostics. See [First-Use MCP Bootstrap](docs/first-use-mcp.md).
+
 ## Quick Use
 
 ```bash
@@ -54,10 +72,16 @@ bin/xcode --version --json
 bin/xcode doctor --json
 bin/xcode native app xcode-state --json
 bin/xcode native ax xcode-windows --json
+swift build -c release --package-path native/XcodeMCPServer
+cp native/XcodeMCPServer/.build/release/xcode-mcp-server bin/xcode-mcp-server
+bin/xcode-mcp-server --doctor --json
+bin/xcode-mcp-server --list-tools --json
 bin/xcode ide status --json
+bin/xcode ide preflight --workspace-path /path/to/App.xcodeproj --scheme App --destination-id <UDID> --json
 bin/xcode ide list-workspaces --json
 bin/xcode ide workspace-info --workspace-path /path/to/App.xcodeproj --json
 bin/xcode ide scheme-action --workspace-path /path/to/App.xcodeproj --action build --timeout-seconds 300 --json
+bin/xcode workflow run-app --project-path App.xcodeproj --scheme App --destination-id <UDID> --json
 bin/xcode context --path App.xcodeproj --scheme App --json
 bin/xcode simulator resolve --name "iPhone SE (3rd generation)" --runtime "iOS 18.5" --json
 bin/xcode build --project App.xcodeproj --scheme App --destination 'platform=iOS Simulator,id=<UDID>' --action build --dry-run --json
@@ -68,8 +92,15 @@ The terminal is still the transport for `bin/xcode`, but explicit plugin invocat
 Package a clean plugin zip:
 
 ```bash
-bin/xcode package zip --output /tmp/xcode-plugin-0.3.0.zip --json
-bin/xcode package audit --zip /tmp/xcode-plugin-0.3.0.zip --json
+bin/xcode package zip --output /tmp/xcode-plugin-0.4.0.zip --json
+bin/xcode package audit --zip /tmp/xcode-plugin-0.4.0.zip --json
+```
+
+For v0.4.0 packages:
+
+```bash
+bin/xcode package zip --output /tmp/xcode-plugin-0.4.0.zip --json
+bin/xcode package audit --zip /tmp/xcode-plugin-0.4.0.zip --json
 ```
 
 ## What It Provides
@@ -82,6 +113,7 @@ bin/xcode package audit --zip /tmp/xcode-plugin-0.3.0.zip --json
 - `xcode-doctor`: local Xcode/toolchain/plugin checks.
 - `xcode-ide-automation`: AppleScript/JXA control of the open Xcode app for IDE-specific actions.
 - `xcode-native-helper`: optional Swift helper for Xcode process state, installed Xcode discovery, permission status, workspace opening, and read-only AX window/modal inspection.
+- `xcode-mcp-server`: bundled Swift MCP stdio server exposing typed tools that call `bin/xcode`.
 - `xcode-workflows`: GUI-first guidance for choosing IDE, native helper, simulator, results, warnings, doctor, or CLI fallback flows.
 
 ## Contract
@@ -108,6 +140,7 @@ Large logs, screenshots, diagnostics, and `.xcresult` data stay on disk. Respons
 ## Documentation
 
 - [Installation](docs/installation.md)
+- [First-Use MCP Bootstrap](docs/first-use-mcp.md)
 - [Architecture](docs/architecture.md)
 - [Workflows](docs/workflows.md)
 - [Validation](docs/validation.md)
@@ -119,4 +152,6 @@ Large logs, screenshots, diagnostics, and `.xcresult` data stay on disk. Respons
 - Simulator commands prefer UDIDs. Name aliases must resolve uniquely first.
 - `trusted-fast` requires an explicit trust reason because skipping package plugin and macro validation is security-sensitive.
 - The Swift helper is optional and diagnostic-first. It must not run builds, run simulators, parse `.xcresult`, click UI, select schemes, or select destinations.
+- The Swift MCP server is callable-tool glue only. It must call `bin/xcode` with direct argv and must not call `xcodebuild`, `simctl`, `xcresulttool`, `osascript`, or `open` directly.
+- Both Swift binaries are built for macOS 14.0 or newer. Local ad hoc signatures and `spctl` rejection are acceptable for development; notarization is out of scope.
 - Apple `mcpbridge` is optional.

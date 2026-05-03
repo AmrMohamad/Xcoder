@@ -1,0 +1,80 @@
+name: Xcoder MCP first-use failure
+description: Report failures while building, chmodding, launching, or validating the bundled Swift MCP server.
+title: "MCP first-use failure: "
+labels:
+  - bug
+  - mcp
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this template when Xcoder cannot build, make executable, launch, or expose its bundled Swift MCP server.
+        Do not paste secrets, full build logs, .xcresult bundles, screenshots, simulator diagnostics, signing identities, or private source files.
+  - type: input
+    id: xcoder-version
+    attributes:
+      label: Xcoder version
+      description: Output from `bin/xcode --version --json`.
+      placeholder: "0.4.0"
+    validations:
+      required: true
+  - type: input
+    id: macos-version
+    attributes:
+      label: macOS version
+      description: Output from `sw_vers -productVersion`.
+      placeholder: "15.7.5"
+    validations:
+      required: true
+  - type: input
+    id: xcode-select
+    attributes:
+      label: xcode-select path
+      description: Output from `xcode-select -p`.
+      placeholder: "/Applications/Xcode.app/Contents/Developer"
+    validations:
+      required: true
+  - type: input
+    id: swift-version
+    attributes:
+      label: Swift version
+      description: Output from `swift --version`.
+    validations:
+      required: true
+  - type: checkboxes
+    id: files
+    attributes:
+      label: File readiness
+      options:
+        - label: "`.mcp.json` exists and parses."
+        - label: "`bin/xcode-mcp` exists and is executable."
+        - label: "`bin/xcode-mcp-server` exists and is executable."
+        - label: "`native/XcodeMCPServer/Package.resolved` exists."
+  - type: textarea
+    id: commands
+    attributes:
+      label: Commands run
+      description: Paste the exact setup commands you ran.
+      render: text
+      value: |
+        python3 -m json.tool .codex-plugin/plugin.json
+        python3 -m json.tool .mcp.json
+        python3 -m py_compile scripts/*.py
+        swift build -c release --package-path native/XcodeMCPServer
+        bin/xcode-mcp --doctor --json
+        bin/xcode doctor --json
+    validations:
+      required: true
+  - type: textarea
+    id: failure
+    attributes:
+      label: Failure
+      description: Include the failing command, exit code, and compact redacted output.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: Notes
+      description: Keep this compact. Link to local artifact paths only when useful.

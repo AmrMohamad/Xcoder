@@ -1,6 +1,6 @@
 {
   "name": "xcode",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "GUI-first Xcode.app automation for Codex, with plugin-routed CLI support for builds, simulators, results, diagnostics, and native Xcode state sensing.",
   "author": {
     "name": "Local",
@@ -24,10 +24,11 @@
   ],
   "skills": "./skills/",
   "hooks": "./hooks/hooks.json",
+  "mcpServers": "./.mcp.json",
   "interface": {
     "displayName": "Xcode",
     "shortDescription": "Control Xcode.app through the GUI first, with plugin-routed CLI support when needed",
-    "longDescription": "GUI-first Xcode workflows for Codex. When this plugin is explicitly mentioned, agents should control the open Xcode.app window through bin/xcode ide/native commands before using command-line validation. The stable bin/xcode dispatcher also provides shared-cache xcodebuild validation, simulator lifecycle commands, xcresulttool summaries, warning parsing, read-only context inspection, packaging validation, and environment diagnostics. Bare xcodebuild, simctl, xcresulttool, osascript, open -a Xcode, and old xcode-cli-shared-cache-build usage should be avoided; the plugin dispatcher owns those paths. The plugin does not depend on XcodeBuildMCP, and Apple's mcpbridge is treated as optional.",
+    "longDescription": "GUI-first Xcode workflows for Codex. On first use, or whenever the mcp__xcode__* namespace is missing, agents must run the one-action bootstrap command bin/xcode mcp bootstrap --json, then restart Codex if the local smoke checks pass. When this plugin is explicitly mentioned, agents should control the open Xcode.app window through callable MCP tools or bin/xcode ide/native commands before using command-line validation. The stable bin/xcode dispatcher also provides shared-cache xcodebuild validation, simulator lifecycle commands, xcresulttool summaries, warning parsing, read-only context inspection, packaging validation, and environment diagnostics. Bare xcodebuild, simctl, xcresulttool, osascript, open -a Xcode, XcodeBuildMCP, and old xcode-cli-shared-cache-build usage should be avoided; the plugin dispatcher owns those paths. If first-use MCP bootstrap still fails after repair, agents must report it at https://github.com/AmrMohamad/Xcoder/issues with compact redacted diagnostics. The plugin does not depend on XcodeBuildMCP, and Apple's mcpbridge is treated as optional.",
     "developerName": "Local",
     "category": "Coding",
     "capabilities": [
@@ -39,14 +40,12 @@
         "privacyPolicyURL": "https://www.apple.com/legal/privacy/",
         "termsOfServiceURL": "https://www.apple.com/legal/",
         "logo": "./assets/app-icon.png",
-        "composerIcon": "./assets/app-icon.png",
-        "defaultPrompt": [
-            "Control the open Xcode window and run the selected scheme through the GUI",
-            "Use Xcode.app GUI automation to build or test this project",
-            "Diagnose my local Xcode GUI, Accessibility, and simulator setup",
-            "Summarize this xcresult bundle",
-            "Inspect native Xcode app state and Accessibility readiness"
-        ],
+    "composerIcon": "./assets/app-icon.png",
+    "defaultPrompt": [
+      "Control the open Xcode window and run the selected scheme through the GUI",
+      "Bootstrap the bundled Xcoder Swift MCP server and verify mcp__xcode__* tools",
+      "Use Xcode.app GUI automation to build or test this project"
+    ],
     "brandColor": "#0A84FF",
     "screenshots": []
   }
