@@ -2,7 +2,7 @@
 
 ![Xcoder local Xcode workflow diagram](docs/images/xcoder-hero.png)
 
-Xcoder is a local-first Codex plugin for Xcode workflows. It gives Codex one stable command, `bin/xcode`, for build/test planning, simulator control, result summaries, warning audits, IDE automation, environment diagnostics, and optional native macOS/Xcode state sensing.
+Xcoder is a GUI-first Codex plugin for Xcode workflows. When users explicitly mention `@xcode`, Codex should inspect and control Xcode.app first through `bin/xcode native ...` and `bin/xcode ide ...`, then use plugin-routed CLI support only when GUI control cannot answer the task or the user explicitly asks for headless validation.
 
 It does not depend on XcodeBuildMCP. It uses Apple tools directly: `xcodebuild`, `xcrun simctl`, `xcrun xcresulttool`, `osascript`/JXA, Xcode scripting, and a small optional Swift helper for native app state and read-only Accessibility inspection.
 
@@ -52,10 +52,18 @@ This follows OpenAI's Codex plugin marketplace format: the plugin manifest lives
 bin/xcode --help
 bin/xcode --version --json
 bin/xcode doctor --json
+bin/xcode native app xcode-state --json
+bin/xcode native ax xcode-windows --json
+bin/xcode ide status --json
+bin/xcode ide list-workspaces --json
+bin/xcode ide workspace-info --workspace-path /path/to/App.xcodeproj --json
+bin/xcode ide scheme-action --workspace-path /path/to/App.xcodeproj --action build --timeout-seconds 300 --json
 bin/xcode context --path App.xcodeproj --scheme App --json
 bin/xcode simulator resolve --name "iPhone SE (3rd generation)" --runtime "iOS 18.5" --json
 bin/xcode build --project App.xcodeproj --scheme App --destination 'platform=iOS Simulator,id=<UDID>' --action build --dry-run --json
 ```
+
+The terminal is still the transport for `bin/xcode`, but explicit plugin invocation should not bypass Xcoder with bare `xcodebuild`, `xcrun simctl`, `simctl`, `xcresulttool`, `osascript`, `open -a Xcode`, or the old `xcode-cli-shared-cache-build` skill.
 
 Package a clean plugin zip:
 
@@ -66,7 +74,7 @@ bin/xcode package audit --zip /tmp/xcode-plugin-0.3.0.zip --json
 
 ## What It Provides
 
-- `xcode-build-cache`: shared DerivedData and SwiftPM cache wrapper around `xcodebuild`.
+- `xcode-build-cache`: plugin-routed CLI fallback/support for shared DerivedData and SwiftPM cache builds.
 - `xcode-context`: read-only project, scheme, destination, and testability guidance.
 - `xcode-simulator`: `simctl` list, resolve, prepare, boot, install, launch, screenshot, terminate, and shutdown flows.
 - `xcode-results`: normalized `xcresulttool` summaries.
@@ -74,7 +82,7 @@ bin/xcode package audit --zip /tmp/xcode-plugin-0.3.0.zip --json
 - `xcode-doctor`: local Xcode/toolchain/plugin checks.
 - `xcode-ide-automation`: AppleScript/JXA control of the open Xcode app for IDE-specific actions.
 - `xcode-native-helper`: optional Swift helper for Xcode process state, installed Xcode discovery, permission status, workspace opening, and read-only AX window/modal inspection.
-- `xcode-workflows`: guidance for choosing CLI, simulator, IDE, native helper, or results flows.
+- `xcode-workflows`: GUI-first guidance for choosing IDE, native helper, simulator, results, warnings, doctor, or CLI fallback flows.
 
 ## Contract
 
@@ -106,8 +114,8 @@ Large logs, screenshots, diagnostics, and `.xcresult` data stay on disk. Respons
 
 ## Important Boundaries
 
-- Default build/test path is `xcodebuild`, not AppleScript.
-- IDE automation is only for open Xcode state and IDE-specific actions.
+- Explicit `@xcode` invocation means GUI-first: inspect and control Xcode.app before using CLI validation.
+- `xcodebuild` is a plugin-routed fallback/support path through `bin/xcode build`, not the default response to an explicit plugin mention.
 - Simulator commands prefer UDIDs. Name aliases must resolve uniquely first.
 - `trusted-fast` requires an explicit trust reason because skipping package plugin and macro validation is security-sensitive.
 - The Swift helper is optional and diagnostic-first. It must not run builds, run simulators, parse `.xcresult`, click UI, select schemes, or select destinations.

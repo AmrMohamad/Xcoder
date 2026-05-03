@@ -2,6 +2,8 @@
 
 Use this page to choose the right Xcoder path.
 
+When a user explicitly mentions `@xcode`, `xcode@local`, or any bundled `xcode-*` skill, use GUI-first routing. Start by proving Xcode.app state, then drive Xcode through `bin/xcode ide ...` whenever possible. Use `bin/xcode build ...` only as plugin-routed fallback/support after explaining why GUI control cannot satisfy the task, or when the user explicitly asks for CLI/headless validation.
+
 ## Read Project Context First
 
 ```bash
@@ -13,9 +15,25 @@ bin/xcode context \
 
 Use `context` before test decisions. If a scheme has no testable references, Xcoder should recommend build instead of test.
 
-## CLI Build
+## GUI-First Flow
 
-Use CLI build for normal validation:
+```bash
+bin/xcode doctor --json
+bin/xcode native app xcode-state --json
+bin/xcode native ax xcode-windows --json
+bin/xcode ide status --json
+bin/xcode ide list-workspaces --json
+bin/xcode ide workspace-info --workspace-path /path/to/App.xcodeproj --json
+bin/xcode context --path /path/to/App.xcodeproj --scheme 'App (Debug)' --json
+bin/xcode simulator resolve --name "iPhone SE (3rd generation)" --runtime "iOS 18.5" --json
+bin/xcode ide scheme-action --workspace-path /path/to/App.xcodeproj --action build --scheme 'App (Debug)' --destination-id <UDID> --timeout-seconds 300 --json
+```
+
+Do not bypass Xcoder with bare `xcodebuild`, `xcrun simctl`, `simctl`, `xcresulttool`, `osascript`, `open -a Xcode`, or `xcode-cli-shared-cache-build`.
+
+## CLI Build Fallback
+
+Use CLI build for explicit headless validation or after the GUI route is proven unavailable/insufficient:
 
 ```bash
 bin/xcode build \
@@ -97,11 +115,14 @@ Warning summarization exits `0` even when warnings are found. It does not change
 
 ## IDE Automation
 
-Use IDE automation only when the open Xcode app matters:
+Use IDE automation first when `@xcode` is explicitly mentioned:
 
 ```bash
+bin/xcode ide status --json
+bin/xcode ide list-workspaces --json
 bin/xcode ide workspace-info --workspace-path /path/to/App.xcodeproj --json
 bin/xcode ide set-scheme --workspace-path /path/to/App.xcodeproj --scheme App --json
+bin/xcode ide scheme-action --workspace-path /path/to/App.xcodeproj --action test --scheme App --destination-id <UDID> --timeout-seconds 300 --json
 ```
 
 If `--workspace-path` is supplied, matching is strict. Xcoder should not fall back to the active window if the requested workspace cannot be matched.

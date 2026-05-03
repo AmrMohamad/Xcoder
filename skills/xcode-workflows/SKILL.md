@@ -1,33 +1,47 @@
 ---
 name: xcode-workflows
-description: Choose the right Xcode plugin flow for CLI builds, IDE-controlled tests, simulator work, result summaries, warnings, context, and diagnostics.
+description: Choose the right GUI-first Xcode plugin flow, using Xcode.app IDE/native automation before plugin-routed CLI fallback.
 ---
 
 # Xcode Workflows
 
-Use this skill to choose between the plugin’s build, context, IDE, simulator, results, warning, and doctor workflows.
+Use this skill to choose between the plugin’s GUI, native, context, simulator, results, warning, doctor, and CLI fallback workflows.
+
+## Explicit Plugin Contract
+
+When the user explicitly mentions `@xcode`, `xcode@local`, or any bundled `xcode-*` skill, enter GUI-first mode.
+
+In GUI-first mode:
+
+- Start with Xcode.app evidence through `bin/xcode native ...` and `bin/xcode ide ...`.
+- Prefer `bin/xcode ide scheme-action` for build, test, run, debug, and stop.
+- Use `bin/xcode build` only as plugin-routed fallback/support after explaining why GUI control cannot satisfy the task, or when the user explicitly asks for CLI/headless validation.
+- Do not run bare `xcodebuild`, `xcrun simctl`, `simctl`, `xcresulttool`, `osascript`, `open -a Xcode`, or old `xcode-cli-shared-cache-build`.
+- If the plugin lacks the needed GUI command, say that plainly and propose the plugin command that should be added.
 
 ## Decision Table
 
-- Unknown project/scheme state: use `bin/xcode context`.
-- Normal build/test validation: use `bin/xcode build`.
+- Unknown Xcode GUI state: use `bin/xcode native app xcode-state`, `bin/xcode native ax xcode-windows`, and `bin/xcode ide status`.
 - Open Xcode window state, scheme selection, destination selection, or IDE test/run/debug: use `bin/xcode ide`.
-- Native Xcode process state, Accessibility readiness, installed Xcode apps, or blocking window inspection: use `bin/xcode native`.
+- Unknown project/scheme state: use `bin/xcode context`, then return to `bin/xcode ide` when possible.
 - Simulator inventory, resolve, boot, install, launch, terminate, or screenshot: use `bin/xcode simulator`.
 - `.xcresult` summaries: use `bin/xcode results`.
 - xcodebuild log warnings/errors: use `bin/xcode warnings summarize`.
 - Toolchain, permissions, SDEF, or optional `mcpbridge` diagnosis: use `bin/xcode doctor`.
+- CLI/headless fallback only: use `bin/xcode build`.
 
-## Standard Flow
+## GUI-First Standard Flow
 
 ```bash
 bin/xcode doctor --json
 bin/xcode native app xcode-state --json
+bin/xcode native ax xcode-windows --json
+bin/xcode ide status --json
+bin/xcode ide list-workspaces --json
+bin/xcode ide workspace-info --workspace-path /path/to/App.xcodeproj --json
 bin/xcode context --path /path/to/App.xcodeproj --scheme 'App (Debug)' --json
 bin/xcode simulator resolve --name "iPhone SE (3rd generation)" --runtime "iOS 18.5" --json
-bin/xcode build --project /path/to/App.xcodeproj --scheme 'App (Debug)' --destination 'platform=iOS Simulator,id=<UDID>' --action build --dry-run --json
-bin/xcode build --project /path/to/App.xcodeproj --scheme 'App (Debug)' --destination 'platform=iOS Simulator,id=<UDID>' --action build --json
-bin/xcode warnings summarize --log .codex/xcode/artifacts/<run>/stderr.log --json
+bin/xcode ide scheme-action --workspace-path /path/to/App.xcodeproj --action build --scheme 'App (Debug)' --destination-id <UDID> --timeout-seconds 300 --json
 ```
 
 ## IDE-Controlled Flow
@@ -46,3 +60,5 @@ bin/xcode ide scheme-action --workspace-path /path/to/App.xcodeproj --action tes
 ## Boundary
 
 This plugin is local-first and script-backed. It does not depend on XcodeBuildMCP. Apple `mcpbridge` is treated as optional until local compatibility is proven.
+
+The terminal may be used to invoke `bin/xcode`, but explicit plugin use means the agent should not bypass the plugin with direct Apple developer tools.

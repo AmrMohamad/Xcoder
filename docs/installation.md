@@ -22,6 +22,8 @@ codex
 
 Choose the Xcoder marketplace, open `xcode`, and install it. After installation, start a new Codex thread and invoke it with `@xcode` or one of its bundled skills.
 
+Explicit `@xcode` invocation is GUI-first. Codex should inspect and control Xcode.app through `bin/xcode native ...` and `bin/xcode ide ...` before falling back to `bin/xcode build ...`.
+
 ## Local Development Checkout
 
 Clone the repo anywhere:

@@ -4,6 +4,8 @@
 
 Xcoder keeps Python as the public contract owner. Swift is only an optional native helper for macOS/Xcode state where Python and JXA are weaker.
 
+Explicit plugin invocation is GUI-first: when the user mentions `@xcode`, the agent should inspect and control Xcode.app through `bin/xcode native ...` and `bin/xcode ide ...` before considering plugin-routed CLI fallback.
+
 ## Command Flow
 
 ```mermaid
@@ -12,15 +14,14 @@ flowchart LR
     Skill --> CLI["bin/xcode"]
     CLI --> Dispatcher["scripts/xcode.py"]
 
-    Dispatcher --> Build["build\nxcodebuild + shared cache"]
+    Dispatcher --> Native["native\nSwift helper adapter"]
+    Dispatcher --> IDE["ide\nosascript / JXA"]
+    Dispatcher --> Build["build\nxcodebuild + shared cache fallback"]
     Dispatcher --> Context["context\nread-only project guidance"]
     Dispatcher --> Sim["simulator\nxcrun simctl"]
     Dispatcher --> Results["results\nxcresulttool"]
     Dispatcher --> Warnings["warnings\nlog parser"]
     Dispatcher --> Doctor["doctor\ntoolchain checks"]
-    Dispatcher --> IDE["ide\nosascript / JXA"]
-    Dispatcher --> Native["native\nSwift helper adapter"]
-
     Native --> Helper["bin/xcode-native-helper"]
     Helper --> AppKit["Foundation + AppKit"]
     Helper --> AX["ApplicationServices AX\nread-only"]
@@ -88,4 +89,3 @@ Raw logs and result bundles are local artifacts. Chat responses should reference
 ```
 
 The build cache identity includes the trusted-fast state, Xcode version, scheme, configuration, and project path hash. A cache metadata mismatch fails instead of reusing silently.
-

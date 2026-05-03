@@ -63,7 +63,7 @@ PY
 Expected:
 
 ```text
-entry_count 43
+entry_count 46
 expected_prefix_only True
 manifest True
 marketplace True

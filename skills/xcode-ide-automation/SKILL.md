@@ -5,11 +5,15 @@ description: Control the open Xcode app through AppleScript/JXA for workspace st
 
 # Xcode IDE Automation
 
-Use this skill when the user needs Codex to take control of the Xcode window or validate behavior through the open IDE. Do not use it as the default build system; normal builds/tests go through `xcode-build-cache`.
+Use this skill when the user needs Codex to take control of the Xcode window or validate behavior through the open IDE.
+
+When the user explicitly mentions `@xcode`, `xcode@local`, or asks this plugin to work with Xcode, this is the primary path for build/test/run/debug unless the user explicitly asks for CLI/headless validation or GUI control is unavailable.
 
 ## Rules
 
 - Use AppleScript/JXA only for Xcode app state and IDE actions that require the open app.
+- Start explicit plugin invocations with GUI evidence: `bin/xcode native app xcode-state --json`, `bin/xcode native ax xcode-windows --json`, `bin/xcode ide status --json`, and workspace inspection.
+- Do not replace GUI action with `bin/xcode build` just because a terminal command is easier. Use CLI fallback only after reporting why the GUI path cannot satisfy the task.
 - Prefer `--workspace-path` for every workspace-specific command.
 - If multiple workspaces are open and no `--workspace-path` is supplied, fail before changing scheme or destination.
 - If `--workspace-path` is supplied and cannot be matched, do not fall back to the active window.

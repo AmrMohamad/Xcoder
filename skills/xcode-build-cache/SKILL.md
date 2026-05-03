@@ -1,15 +1,23 @@
 ---
 name: xcode-build-cache
-description: Run local Xcode CLI builds and tests through the plugin shared-cache xcodebuild wrapper with compact v0.3 JSON, dry-run parity, focused tests, and explicit trusted-fast controls.
+description: Use plugin-routed CLI build/test support only when GUI-first Xcode.app automation is not the requested path, not possible, or explicitly bypassed by the user.
 ---
 
 # Xcode Build Cache
 
-Use this skill when Codex needs to build, test, or validate an Xcode project/workspace from the command line. This is the default path for builds and tests unless the user specifically needs the open Xcode IDE window.
+Use this skill when Codex needs plugin-routed command-line build/test support after the GUI path has been considered.
+
+When the user explicitly mentions `@xcode`, `xcode@local`, or asks this plugin to control Xcode, GUI-first mode is active. In GUI-first mode, do not start with `bin/xcode build`. Start with `bin/xcode native ...` and `bin/xcode ide ...`, then use `bin/xcode build` only when:
+
+- the user explicitly asks for CLI/headless validation,
+- Xcode.app GUI control is unavailable or blocked,
+- the IDE action cannot produce the needed artifact,
+- a deterministic fallback is needed after reporting the GUI limitation.
 
 ## Rules
 
-- Prefer `bin/xcode build` for normal build/test validation.
+- Never run bare `xcodebuild`; this skill owns build/test CLI work through `bin/xcode build`.
+- In explicit plugin invocations, prefer `bin/xcode ide scheme-action` for build/test/run/debug before CLI fallback.
 - Keep the old `xcode-cli-shared-cache-build` skill untouched; this plugin carries the runner forward locally.
 - Use `--dry-run --json` first when planning a command or checking parity.
 - Keep `trusted-fast` explicit. It requires `--trusted-fast --trust-reason`.

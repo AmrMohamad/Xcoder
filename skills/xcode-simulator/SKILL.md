@@ -7,10 +7,13 @@ description: Manage Apple simulators with xcrun simctl for list, resolve, boot, 
 
 Use this skill when Codex needs simulator lifecycle control through Apple’s `xcrun simctl`.
 
+In explicit `@xcode` GUI-first mode, simulator commands are support for Xcode.app automation: resolve/boot/open the simulator, then drive build/test/run/debug through `bin/xcode ide ...` when possible.
+
 ## Rules
 
 - Prefer UDIDs for lifecycle commands.
 - Resolve name/runtime first; fail if no match or more than one match.
+- Do not run bare `xcrun simctl` or `simctl`; use `bin/xcode simulator`.
 - Runtime matching accepts aliases such as `iOS 18.5`, `iOS-18-5`, and `com.apple.CoreSimulator.SimRuntime.iOS-18-5`.
 - Do not silently pass duplicate simulator names to `simctl`.
 - Screenshots default to plugin artifact directories. Arbitrary output paths require `--allow-any-output-path`.

@@ -7,6 +7,8 @@ description: Summarize xcodebuild warning and error logs without changing the un
 
 Use this skill after a build/test produces a log and Codex needs a compact warning/error inventory.
 
+In explicit `@xcode` GUI-first mode, use warning audit only after an IDE action or plugin-routed fallback produced a log. Do not run raw grep/awk pipelines over Xcode logs as the primary answer.
+
 ## Commands
 
 ```bash

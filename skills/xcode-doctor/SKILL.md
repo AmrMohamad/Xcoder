@@ -7,6 +7,8 @@ description: Validate local Xcode, xcodebuild, simctl, xcresulttool, JXA, Xcode 
 
 Use this skill before relying on local Xcode automation or when a build/simulator/result workflow fails for environmental reasons.
 
+When `@xcode`, `xcode@local`, or another `xcode-*` skill is explicitly mentioned, doctor is a GUI-readiness preflight. Use it to prove Xcode.app, JXA, Accessibility, SDEF, and the native helper are usable before deciding that GUI automation is blocked.
+
 ## Checks
 
 - Selected Xcode developer directory from `xcode-select -p`.
@@ -31,3 +33,5 @@ bin/xcode doctor --strict --json
 `mcpbridge` is optional. If it is present but crashes on this macOS/Xcode combination, report it as `optional_unavailable` and continue with local scripts. Never mutate `xcode-select`.
 
 The native helper is optional for build/simulator/results flows. Doctor may report it as unavailable, but must not fail unless `--strict` later makes native IDE readiness mandatory. Doctor must never run `bin/xcode native permissions request`.
+
+Do not run bare `xcodebuild`, `xcrun`, `simctl`, `xcresulttool`, or `osascript` from outside the plugin. Use `bin/xcode doctor --json` so the plugin envelope captures the GUI-readiness result.

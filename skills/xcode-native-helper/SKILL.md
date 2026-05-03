@@ -7,6 +7,8 @@ description: Use the optional Swift native helper for fast Xcode process state, 
 
 Use this skill when Xcode IDE automation needs native macOS preflight signal before AppleScript/JXA actions, or when the user asks whether Xcode is running/frontmost, which Xcode app is active, or whether Accessibility is ready.
 
+When `@xcode`, `xcode@local`, or another `xcode-*` skill is explicitly mentioned, run native preflight before GUI mutation whenever possible. This is how the plugin proves it is working with Xcode.app instead of bypassing the GUI.
+
 ## Commands
 
 ```bash

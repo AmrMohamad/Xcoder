@@ -7,6 +7,8 @@ description: Summarize .xcresult bundles using xcresulttool get test-results, bu
 
 Use this skill when Codex needs compact result summaries from `.xcresult` bundles produced by Xcode or `xcodebuild`.
 
+In explicit `@xcode` GUI-first mode, use this skill after an IDE or plugin-routed build/test produced an `.xcresult`. Do not use raw `xcresulttool` directly; use `bin/xcode results`.
+
 ## Rules
 
 - Prefer structured `xcresulttool` summaries over raw log parsing.
