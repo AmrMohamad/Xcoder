@@ -50,6 +50,44 @@ final class XcodeToolArgumentsTests: XCTestCase {
         )
     }
 
+    func testIdeRunUsesMcpSafeDefaultTimeout() throws {
+        let argv = try XcodeToolArguments.argv(
+            for: "xcode_ide_run",
+            arguments: [
+                "workspace_path": .string("/tmp/App.xcodeproj"),
+                "scheme": .string("App"),
+                "destination_name": .string("iPhone SE (3rd generation)")
+            ]
+        )
+
+        XCTAssertEqual(
+            argv,
+            [
+                "ide", "scheme-action",
+                "--action", "run",
+                "--workspace-path", "/tmp/App.xcodeproj",
+                "--scheme", "App",
+                "--timeout-seconds", "95",
+                "--require-native-preflight",
+                "--destination-name", "iPhone SE (3rd generation)",
+                "--json"
+            ]
+        )
+    }
+
+    func testIdeRunCapsRequestedTimeoutBelowMcpClientLimit() throws {
+        let argv = try XcodeToolArguments.argv(
+            for: "xcode_ide_run",
+            arguments: [
+                "workspace_path": .string("/tmp/App.xcodeproj"),
+                "scheme": .string("App"),
+                "timeout_seconds": .int(180)
+            ]
+        )
+
+        XCTAssertEqual(argv.dropFirst(8).prefix(2), ["--timeout-seconds", "95"])
+    }
+
     func testReadOnlyIdeDiscoveryMappings() throws {
         XCTAssertEqual(try XcodeToolArguments.argv(for: "xcode_ide_status", arguments: [:]), ["ide", "status", "--json"])
         XCTAssertEqual(

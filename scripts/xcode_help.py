@@ -30,6 +30,8 @@ TOPICS: dict[str, dict[str, Any]] = {
         "next_actions": [
             "Inspect Xcode state before choosing build, test, or run arguments.",
             "Use xcode_ide_build, xcode_ide_test, or xcode_ide_run through MCP for IDE actions.",
+            "For builds or tests that exceed the MCP call budget, use the equivalent bin/xcode ... --json command so Codex can wait outside the MCP transport limit.",
+            "For app runs that exceed the MCP call budget, use bin/xcode workflow run-app --json rather than increasing xcode_ide_run timeout_seconds.",
         ],
         "source_docs": ["docs/architecture.md", "docs/workflows.md"],
     },

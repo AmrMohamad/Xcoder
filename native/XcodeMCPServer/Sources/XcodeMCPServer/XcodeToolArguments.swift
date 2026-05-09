@@ -51,7 +51,12 @@ enum XcodeToolArguments {
         case "xcode_ide_test":
             return try ideActionArguments("test", arguments: arguments, defaultTimeout: 600)
         case "xcode_ide_run":
-            return try ideActionArguments("run", arguments: arguments, defaultTimeout: 180)
+            return try ideActionArguments(
+                "run",
+                arguments: arguments,
+                defaultTimeout: XcodeMCPTimeouts.ideRunActionSeconds,
+                maxTimeout: XcodeMCPTimeouts.ideRunActionSeconds
+            )
         case "xcode_run_app":
             var argv = [
                 "workflow", "run-app",
@@ -102,13 +107,15 @@ enum XcodeToolArguments {
         }
     }
 
-    private static func ideActionArguments(_ action: String, arguments: [String: Value], defaultTimeout: Int) throws -> [String] {
+    private static func ideActionArguments(_ action: String, arguments: [String: Value], defaultTimeout: Int, maxTimeout: Int? = nil) throws -> [String] {
+        let requestedTimeout = ArgumentValues.int(arguments["timeout_seconds"], default: defaultTimeout)
+        let timeout = maxTimeout.map { min(requestedTimeout, $0) } ?? requestedTimeout
         var argv = [
             "ide", "scheme-action",
             "--action", action,
             "--workspace-path", try ArgumentValues.requiredString(arguments["workspace_path"], key: "workspace_path"),
             "--scheme", try ArgumentValues.requiredString(arguments["scheme"], key: "scheme"),
-            "--timeout-seconds", String(ArgumentValues.int(arguments["timeout_seconds"], default: defaultTimeout)),
+            "--timeout-seconds", String(timeout),
             "--require-native-preflight"
         ]
         ArgumentValues.appendOptionalString(arguments["destination_id"], flag: "--destination-id", to: &argv)

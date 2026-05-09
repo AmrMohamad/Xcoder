@@ -13,7 +13,7 @@ enum JSONEnvelope {
         ])
     }
 
-    static func failure(errorType: String, summary: String, details: [String: Any]? = nil) -> String {
+    static func failure(errorType: String, summary: String, details: [String: Any]? = nil, nextActions: [String] = []) -> String {
         let recovery = RecoveryCatalog.metadata(for: errorType)
         var enrichedDetails = details ?? [:]
         for (key, value) in recovery.dictionary where enrichedDetails[key] == nil {
@@ -37,7 +37,7 @@ enum JSONEnvelope {
                     "retry_after_seconds": recovery.retryAfterSeconds.map { $0 as Any } ?? NSNull()
                 ]
             ],
-            "next_actions": []
+            "next_actions": nextActions
         ]
         payload["details"] = enrichedDetails
         return compactJSONString(payload)

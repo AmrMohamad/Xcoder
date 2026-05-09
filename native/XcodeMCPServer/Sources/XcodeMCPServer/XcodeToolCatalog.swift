@@ -103,8 +103,8 @@ enum XcodeToolCatalog {
         ),
         .init(
             name: "xcode_ide_build",
-            description: "Build the active or requested Xcode scheme through Xcode.app IDE automation. Examples: 1. workspace_path=\"/Users/me/App/App.xcodeproj\", scheme=\"App\", destination_id=\"...\". 2. workspace_path=\"/Users/me/App/App.xcworkspace\", scheme=\"App\", destination_name=\"iPhone 16\".",
-            timeoutSeconds: 600,
+            description: "Build the active or requested Xcode scheme through Xcode.app IDE automation. The MCP wrapper returns before Codex's protocol timeout if the build is still running; use bin/xcode for longer build validations. Examples: 1. workspace_path=\"/Users/me/App/App.xcodeproj\", scheme=\"App\", destination_id=\"...\". 2. workspace_path=\"/Users/me/App/App.xcworkspace\", scheme=\"App\", destination_name=\"iPhone 16\".",
+            timeoutSeconds: XcodeMCPTimeouts.protocolSafeToolSeconds,
             inputSchema: objectSchema(
                 properties: [
                     "workspace_path": stringSchema(description: "Path to .xcodeproj or .xcworkspace."),
@@ -119,8 +119,8 @@ enum XcodeToolCatalog {
         ),
         .init(
             name: "xcode_ide_test",
-            description: "Run tests for an open Xcode workspace through Xcode.app. Use this after xcode_ide_preflight succeeds. Examples: 1. workspace_path=\"/Users/me/App/App.xcodeproj\", scheme=\"App\", destination_id=\"...\". 2. workspace_path=\"/Users/me/App/App.xcworkspace\", scheme=\"AppTests\", destination_name=\"iPhone 16\".",
-            timeoutSeconds: 600,
+            description: "Run tests for an open Xcode workspace through Xcode.app. The MCP wrapper returns before Codex's protocol timeout if tests are still running; use bin/xcode for longer test validations. Use this after xcode_ide_preflight succeeds. Examples: 1. workspace_path=\"/Users/me/App/App.xcodeproj\", scheme=\"App\", destination_id=\"...\". 2. workspace_path=\"/Users/me/App/App.xcworkspace\", scheme=\"AppTests\", destination_name=\"iPhone 16\".",
+            timeoutSeconds: XcodeMCPTimeouts.protocolSafeToolSeconds,
             inputSchema: objectSchema(
                 properties: [
                     "workspace_path": stringSchema(description: "Path to .xcodeproj or .xcworkspace."),
@@ -135,15 +135,15 @@ enum XcodeToolCatalog {
         ),
         .init(
             name: "xcode_ide_run",
-            description: "Run the active or requested Xcode scheme through Xcode.app IDE automation. Examples: 1. workspace_path=\"/Users/me/App/App.xcodeproj\", scheme=\"App\", destination_id=\"...\". 2. workspace_path=\"/Users/me/App/App.xcworkspace\", scheme=\"App\", destination_name=\"iPhone 16\".",
-            timeoutSeconds: 180,
+            description: "Run the active or requested Xcode scheme through Xcode.app IDE automation. This attached run path is MCP-timeout safe; longer run/install workflows should use bin/xcode workflow run-app. Examples: 1. workspace_path=\"/Users/me/App/App.xcodeproj\", scheme=\"App\", destination_id=\"...\". 2. workspace_path=\"/Users/me/App/App.xcworkspace\", scheme=\"App\", destination_name=\"iPhone 16\".",
+            timeoutSeconds: XcodeMCPTimeouts.ideRunToolSeconds,
             inputSchema: objectSchema(
                 properties: [
                     "workspace_path": stringSchema(description: "Path to .xcodeproj or .xcworkspace."),
                     "scheme": stringSchema(description: "Scheme to run."),
                     "destination_id": stringSchema(description: "Optional simulator/device identifier."),
                     "destination_name": stringSchema(description: "Optional Xcode destination name."),
-                    "timeout_seconds": intSchema(description: "IDE run timeout in seconds.", defaultValue: 180)
+                    "timeout_seconds": intSchema(description: "IDE run poll timeout in seconds. Values above 95 are capped so the MCP call returns before Codex's protocol timeout.", defaultValue: XcodeMCPTimeouts.ideRunActionSeconds)
                 ],
                 required: ["workspace_path", "scheme"]
             ),
@@ -151,8 +151,8 @@ enum XcodeToolCatalog {
         ),
         .init(
             name: "xcode_run_app",
-            description: "High-level GUI-first build and run workflow for an iOS app through bin/xcode workflow run-app.",
-            timeoutSeconds: 900,
+            description: "High-level GUI-first build and run workflow for an iOS app through bin/xcode workflow run-app. The MCP wrapper returns before Codex's protocol timeout if the end-to-end workflow is still running; use bin/xcode workflow run-app --json from a shell command for longer runs.",
+            timeoutSeconds: XcodeMCPTimeouts.protocolSafeToolSeconds,
             inputSchema: objectSchema(
                 properties: [
                     "project_path": stringSchema(description: "Path to .xcodeproj or .xcworkspace."),

@@ -3,6 +3,30 @@ import XCTest
 @testable import XcodeMCPServer
 
 final class XcodeBridgeLifecycleTests: XCTestCase {
+    func testTimeoutReturnsPluginEnvelopeInsteadOfThrowingProtocolError() async throws {
+        let root = temporaryDirectory()
+        let bin = root.appendingPathComponent("bin", isDirectory: true)
+        try FileManager.default.createDirectory(at: bin, withIntermediateDirectories: true)
+        try writeExecutable(
+            at: bin.appendingPathComponent("xcode"),
+            contents: """
+            #!/bin/sh
+            sleep 60
+            """
+        )
+
+        let bridge = XcodeBridge(
+            paths: PluginPaths(executablePath: bin.appendingPathComponent("xcode-mcp-server").path),
+            registry: ActiveProcessRegistry()
+        )
+
+        let result = try await bridge.callTool(name: "xcode_native_state", arguments: nil)
+        XCTAssertFalse(result.isError)
+        XCTAssertTrue(result.json.contains("\"error_type\":\"command_timeout\""))
+        XCTAssertTrue(result.json.contains("\"tool_name\":\"xcode_native_state\""))
+        XCTAssertTrue(result.json.contains("returned this envelope before the client protocol timeout"))
+    }
+
     func testQueuedCallCancellationDoesNotLeakQueueOrLaunchCancelledTool() async throws {
         let root = temporaryDirectory()
         let bin = root.appendingPathComponent("bin", isDirectory: true)

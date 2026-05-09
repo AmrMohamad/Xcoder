@@ -41,6 +41,10 @@ Use `xcode_help` when Codex needs canonical local guidance before choosing a rou
 
 For MCP process diagnostics, use `bin/xcode mcp health --json`. Health is intentionally CLI-only; when a stdio server is running it reads the server's lightweight published state file and reports that server's pid, uptime, RSS when available, active child pid, queued tool count, and running state. If no fresh running-server state exists, the command reports a one-shot `self_probe` payload instead of inventing active-child state.
 
+`xcode_ide_run` is an attached IDE run action, so its MCP poll timeout is capped below Codex's protocol call limit. If a real app run needs more time than that, use the plugin-routed `bin/xcode workflow run-app --json` path from a shell command instead of retrying the MCP run call with a larger timeout.
+
+Long-running MCP wrappers such as `xcode_ide_build`, `xcode_ide_test`, and `xcode_run_app` also use a protocol-safe MCP subprocess budget. When the underlying Xcode operation is still running near the MCP call limit, Xcoder returns an `ok:false` `command_timeout` envelope with recovery guidance instead of letting Codex surface a transport timeout. Use the equivalent `bin/xcode ... --json` command when a full build, test, or run is expected to exceed the MCP call budget.
+
 ## Read Project Context First
 
 ```bash

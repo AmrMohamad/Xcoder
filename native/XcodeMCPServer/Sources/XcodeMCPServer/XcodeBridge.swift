@@ -38,6 +38,9 @@ actor XcodeBridge {
         do {
             try Task.checkCancellation()
             result = try await processExecutor.run(arguments: argv, timeoutSeconds: tool.timeoutSeconds)
+        } catch XcodeToolError.timeout {
+            await releaseExecutionSlot()
+            return timeoutResult(for: tool, argv: argv)
         } catch {
             await releaseExecutionSlot()
             throw error
@@ -70,6 +73,37 @@ actor XcodeBridge {
             ), isError: true)
         }
         return XcodeBridgeResult(json: json, isError: false)
+    }
+
+    private func timeoutResult(for tool: XcodeToolDefinition, argv: [String]) -> XcodeBridgeResult {
+        let summary: String
+        let nextActions: [String]
+        if tool.name == "xcode_ide_run" {
+            summary = "Xcode IDE run did not finish before the MCP-safe timeout. Attached IDE run can stay busy while Xcode launches or attaches to the app, so the MCP server returned this envelope before Codex's protocol timeout."
+            nextActions = [
+                "Inspect Xcode and Simulator state before retrying.",
+                "Use bin/xcode workflow run-app --json for full build/install/launch runs that can exceed the MCP call budget.",
+                "Do not increase xcode_ide_run timeout_seconds above the advertised cap; the MCP route will cap it."
+            ]
+        } else {
+            summary = "bin/xcode did not finish before the MCP tool timeout. The MCP server stopped the active subprocess and returned this envelope before the client protocol timeout."
+            nextActions = [
+                "Inspect bin/xcode mcp health --json for server health.",
+                "Retry if recovery metadata marks the failure transient.",
+                "Use the equivalent bin/xcode CLI path when the operation is expected to exceed the MCP call budget."
+            ]
+        }
+        return XcodeBridgeResult(json: JSONEnvelope.failure(
+            errorType: "command_timeout",
+            summary: summary,
+            details: [
+                "tool_name": tool.name,
+                "mcp_tool_timeout_seconds": tool.timeoutSeconds,
+                "argv": argv,
+                "argv_summary": argv.joined(separator: " ")
+            ],
+            nextActions: nextActions
+        ), isError: false)
     }
 
     private func acquireExecutionSlot() async throws {

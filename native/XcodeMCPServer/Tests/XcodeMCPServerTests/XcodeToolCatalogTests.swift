@@ -63,6 +63,31 @@ final class XcodeToolCatalogTests: XCTestCase {
         }
     }
 
+    func testAllMCPToolTimeoutsStayBelowCodexProtocolLimit() {
+        for definition in XcodeToolCatalog.all {
+            XCTAssertLessThan(definition.timeoutSeconds, 120, definition.name)
+        }
+    }
+
+    func testLongRunningMCPToolsUseProtocolSafeWrapperTimeout() throws {
+        for name in ["xcode_ide_build", "xcode_ide_test", "xcode_ide_run", "xcode_run_app"] {
+            let definition = try XCTUnwrap(XcodeToolCatalog.byName[name])
+            XCTAssertEqual(definition.timeoutSeconds, XcodeMCPTimeouts.protocolSafeToolSeconds, name)
+        }
+    }
+
+    func testIdeRunTimeoutSchemaDocumentsInnerCap() throws {
+        let definition = try XCTUnwrap(XcodeToolCatalog.byName["xcode_ide_run"])
+        XCTAssertEqual(definition.timeoutSeconds, XcodeMCPTimeouts.protocolSafeToolSeconds)
+
+        let schema = try properties(for: "xcode_ide_run")
+        guard case .object(let timeoutSchema)? = schema["timeout_seconds"] else {
+            return XCTFail("xcode_ide_run timeout_seconds schema missing")
+        }
+        XCTAssertEqual(timeoutSchema["default"]?.intValue, 95)
+        XCTAssertTrue(timeoutSchema["description"]?.stringValue?.contains("capped") == true)
+    }
+
     private func properties(for toolName: String) throws -> [String: Value] {
         let definition = try XCTUnwrap(XcodeToolCatalog.byName[toolName])
         guard case .object(let schema) = definition.inputSchema,
