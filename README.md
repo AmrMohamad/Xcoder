@@ -74,7 +74,9 @@ bin/xcode native app xcode-state --json
 bin/xcode native ax xcode-windows --json
 swift build -c release --package-path native/XcodeMCPServer
 cp native/XcodeMCPServer/.build/release/xcode-mcp-server bin/xcode-mcp-server
+bin/xcode mcp health --json
 bin/xcode-mcp-server --doctor --json
+bin/xcode-mcp-server --health --json
 bin/xcode-mcp-server --list-tools --json
 bin/xcode ide status --json
 bin/xcode ide preflight --workspace-path /path/to/App.xcodeproj --scheme App --destination-id <UDID> --json
@@ -89,12 +91,7 @@ bin/xcode build --project App.xcodeproj --scheme App --destination 'platform=iOS
 
 The terminal is still the transport for `bin/xcode`, but explicit plugin invocation should not bypass Xcoder with bare `xcodebuild`, `xcrun simctl`, `simctl`, `xcresulttool`, `osascript`, `open -a Xcode`, or the old `xcode-cli-shared-cache-build` skill.
 
-Package a clean plugin zip:
-
-```bash
-bin/xcode package zip --output /tmp/xcode-plugin-0.4.0.zip --json
-bin/xcode package audit --zip /tmp/xcode-plugin-0.4.0.zip --json
-```
+The MCP server remains a Codex-managed stdio child process, not a daemon. It drains child stdout/stderr while `bin/xcode` runs, cleans up active child processes on shutdown, and publishes lightweight CLI-only health state for diagnostics.
 
 For v0.4.0 packages:
 
@@ -113,7 +110,7 @@ bin/xcode package audit --zip /tmp/xcode-plugin-0.4.0.zip --json
 - `xcode-doctor`: local Xcode/toolchain/plugin checks.
 - `xcode-ide-automation`: AppleScript/JXA control of the open Xcode app for IDE-specific actions.
 - `xcode-native-helper`: optional Swift helper for Xcode process state, installed Xcode discovery, permission status, workspace opening, and read-only AX window/modal inspection.
-- `xcode-mcp-server`: bundled Swift MCP stdio server exposing typed tools that call `bin/xcode`.
+- `xcode-mcp-server`: bundled Swift MCP stdio server exposing typed tools that call `bin/xcode`, including IDE status, workspace, scheme, destination, test, and help tools.
 - `xcode-workflows`: GUI-first guidance for choosing IDE, native helper, simulator, results, warnings, doctor, or CLI fallback flows.
 
 ## Contract
