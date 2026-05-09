@@ -20,16 +20,24 @@ Expected tool names after Codex reload:
 mcp__xcode__xcode_doctor
 mcp__xcode__xcode_native_state
 mcp__xcode__xcode_native_windows
+mcp__xcode__xcode_ide_status
+mcp__xcode__xcode_ide_workspace_info
+mcp__xcode__xcode_ide_list_schemes
+mcp__xcode__xcode_ide_list_destinations
 mcp__xcode__xcode_ide_preflight
 mcp__xcode__xcode_ide_build
+mcp__xcode__xcode_ide_test
 mcp__xcode__xcode_ide_run
 mcp__xcode__xcode_run_app
 mcp__xcode__xcode_simulator_resolve
 mcp__xcode__xcode_results_summary
 mcp__xcode__xcode_warnings_summary
+mcp__xcode__xcode_help
 ```
 
 These tools are wrappers over `bin/xcode`. They are the primary discovery surface, not a separate Xcode implementation.
+
+Use `xcode_help` when Codex needs canonical local guidance before choosing a route. Supported topics are `first-time`, `ide-vs-cli`, `fail-recovery`, `scheme-not-testable`, `destination-ambiguous`, `build-json`, and `package-release`.
 
 ## Read Project Context First
 
@@ -84,6 +92,8 @@ bin/xcode build \
   --dry-run \
   --json
 ```
+
+`bin/xcode build --json` emits one clean `xcode-plugin.v0.3` envelope on stdout. Raw build stdout/stderr are written to artifact logs referenced from the envelope.
 
 ## Build For Testing / Test Without Building
 

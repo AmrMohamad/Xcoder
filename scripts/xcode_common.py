@@ -15,6 +15,8 @@ import time
 from pathlib import Path
 from typing import Any
 
+from xcode_error_catalog import recovery_for_error_type
+
 
 SCHEMA_VERSION = "xcode-plugin.v0.3"
 
@@ -48,6 +50,7 @@ EXIT_CODES: dict[str, int] = {
     "native_helper_build_failed": 63,
     "subprocess_failed": 70,
     "command_timeout": 124,
+    "mcp_bootstrap_failed": 60,
 }
 
 
@@ -189,6 +192,31 @@ def build_envelope(
     return envelope
 
 
+def normalize_error_entry(error: Any, *, error_type: str, summary: Any) -> dict[str, Any]:
+    recovery = recovery_for_error_type(error_type)
+    if isinstance(error, dict):
+        entry = dict(error)
+        entry.setdefault("error_type", str(entry.get("error_type") or error_type))
+        entry.setdefault("message", str(entry.get("message") or summary))
+    else:
+        entry = {
+            "error_type": error_type,
+            "message": str(error if error is not None else summary),
+        }
+    entry_error_type = str(entry.get("error_type") or error_type)
+    entry_recovery = recovery_for_error_type(entry_error_type)
+    for key, value in entry_recovery.items():
+        entry.setdefault(key, value)
+    return entry
+
+
+def enrich_failure_details(details: dict[str, Any] | None, *, error_type: str) -> dict[str, Any]:
+    enriched = dict(details or {})
+    for key, value in recovery_for_error_type(error_type).items():
+        enriched.setdefault(key, value)
+    return enriched
+
+
 def print_envelope(envelope: dict[str, Any], *, artifact_dir: Path | None = None) -> None:
     if artifact_dir is not None:
         stored = dict(envelope)
@@ -245,16 +273,20 @@ def emit_failure(
     started_at: str | None = None,
     elapsed_seconds: float | None = None,
 ) -> int:
+    normalized_errors = [
+        normalize_error_entry(error, error_type=error_type, summary=summary)
+        for error in (errors or [summary])
+    ]
     envelope = build_envelope(
         command_name=command_name,
         ok=False,
         status="failure",
         error_type=error_type,
         summary=summary,
-        details=details,
+        details=enrich_failure_details(details, error_type=error_type),
         artifacts=artifacts,
         warnings=warnings,
-        errors=errors or [],
+        errors=normalized_errors,
         next_actions=next_actions,
         started_at=started_at,
         elapsed_seconds=elapsed_seconds,

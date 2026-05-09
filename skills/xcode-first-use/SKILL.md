@@ -69,13 +69,19 @@ After restart, the Xcoder MCP namespace should expose:
 mcp__xcode__xcode_doctor
 mcp__xcode__xcode_native_state
 mcp__xcode__xcode_native_windows
+mcp__xcode__xcode_ide_status
+mcp__xcode__xcode_ide_workspace_info
+mcp__xcode__xcode_ide_list_schemes
+mcp__xcode__xcode_ide_list_destinations
 mcp__xcode__xcode_ide_preflight
 mcp__xcode__xcode_ide_build
+mcp__xcode__xcode_ide_test
 mcp__xcode__xcode_ide_run
 mcp__xcode__xcode_run_app
 mcp__xcode__xcode_simulator_resolve
 mcp__xcode__xcode_results_summary
 mcp__xcode__xcode_warnings_summary
+mcp__xcode__xcode_help
 ```
 
 ## Repair Rules

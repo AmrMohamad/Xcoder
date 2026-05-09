@@ -18,6 +18,23 @@ enum XcodeToolArguments {
             return ["native", "app", "xcode-state", "--json"]
         case "xcode_native_windows":
             return ["native", "ax", "xcode-windows", "--json"]
+        case "xcode_ide_status":
+            return ["ide", "status", "--json"]
+        case "xcode_ide_workspace_info":
+            var argv = ["ide", "workspace-info"]
+            ArgumentValues.appendOptionalString(arguments["workspace_path"], flag: "--workspace-path", to: &argv)
+            argv.append("--json")
+            return argv
+        case "xcode_ide_list_schemes":
+            var argv = ["ide", "list-schemes"]
+            ArgumentValues.appendOptionalString(arguments["workspace_path"], flag: "--workspace-path", to: &argv)
+            argv.append("--json")
+            return argv
+        case "xcode_ide_list_destinations":
+            var argv = ["ide", "list-destinations"]
+            ArgumentValues.appendOptionalString(arguments["workspace_path"], flag: "--workspace-path", to: &argv)
+            argv.append("--json")
+            return argv
         case "xcode_ide_preflight":
             var argv = ["ide", "preflight"]
             ArgumentValues.appendOptionalString(arguments["workspace_path"], flag: "--workspace-path", to: &argv)
@@ -31,6 +48,8 @@ enum XcodeToolArguments {
             return argv
         case "xcode_ide_build":
             return try ideActionArguments("build", arguments: arguments, defaultTimeout: 600)
+        case "xcode_ide_test":
+            return try ideActionArguments("test", arguments: arguments, defaultTimeout: 600)
         case "xcode_ide_run":
             return try ideActionArguments("run", arguments: arguments, defaultTimeout: 180)
         case "xcode_run_app":
@@ -72,6 +91,12 @@ enum XcodeToolArguments {
             }
             argv.append("--json")
             return argv
+        case "xcode_help":
+            return [
+                "help",
+                "--topic", ArgumentValues.string(arguments["topic"], default: "ide-vs-cli"),
+                "--json"
+            ]
         default:
             throw XcodeToolError.usage("Unknown Xcode MCP tool: \(toolName)")
         }

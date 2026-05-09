@@ -78,16 +78,22 @@ The helper emits `xcode-native-helper.v0.1`. The Python adapter normalizes that 
 xcode_doctor
 xcode_native_state
 xcode_native_windows
+xcode_ide_status
+xcode_ide_workspace_info
+xcode_ide_list_schemes
+xcode_ide_list_destinations
 xcode_ide_preflight
 xcode_ide_build
+xcode_ide_test
 xcode_ide_run
 xcode_run_app
 xcode_simulator_resolve
 xcode_results_summary
 xcode_warnings_summary
+xcode_help
 ```
 
-The server is intentionally thin. It validates typed arguments, rejects free-form execution keys such as `command`, `shell`, `args`, `script`, and `raw`, runs `bin/xcode` through `Process` direct argv, enforces MCP-side timeouts, and returns the existing `xcode-plugin.v0.3` envelope as JSON text. It must not call Apple developer tools directly.
+The server is intentionally thin. It validates typed arguments, rejects free-form execution keys such as `command`, `shell`, `args`, `script`, and `raw`, runs `bin/xcode` through `Process` direct argv, enforces MCP-side timeouts, and returns the existing `xcode-plugin.v0.3` envelope as JSON text. Tool annotations mark read-only discovery/help tools separately from mutating build/test/run workflows, but the annotations are hints only. It must not call Apple developer tools directly.
 
 Minimum OS policy:
 

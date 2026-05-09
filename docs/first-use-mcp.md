@@ -55,13 +55,19 @@ Expected MCP tools:
 xcode_doctor
 xcode_native_state
 xcode_native_windows
+xcode_ide_status
+xcode_ide_workspace_info
+xcode_ide_list_schemes
+xcode_ide_list_destinations
 xcode_ide_preflight
 xcode_ide_build
+xcode_ide_test
 xcode_ide_run
 xcode_run_app
 xcode_simulator_resolve
 xcode_results_summary
 xcode_warnings_summary
+xcode_help
 ```
 
 ## Fire Up The Stdio Server

@@ -5,9 +5,20 @@ struct XcodeToolDefinition {
     let description: String
     let timeoutSeconds: Int
     let inputSchema: Value
+    let annotations: Tool.Annotations
 }
 
 enum XcodeToolCatalog {
+    static let helpTopics = [
+        "first-time",
+        "ide-vs-cli",
+        "fail-recovery",
+        "scheme-not-testable",
+        "destination-ambiguous",
+        "build-json",
+        "package-release"
+    ]
+
     static let all: [XcodeToolDefinition] = [
         .init(
             name: "xcode_doctor",
@@ -18,23 +29,66 @@ enum XcodeToolCatalog {
                     "strict": boolSchema(description: "Treat optional IDE automation warnings as failures.", defaultValue: false),
                     "checks": arraySchema(description: "Optional named doctor checks to focus on when supported by the CLI.", items: stringSchema())
                 ]
-            )
+            ),
+            annotations: readOnlyAnnotations
         ),
         .init(
             name: "xcode_native_state",
             description: "Inspect Xcode process state through the plugin native helper.",
             timeoutSeconds: 8,
-            inputSchema: objectSchema()
+            inputSchema: objectSchema(),
+            annotations: readOnlyAnnotations
         ),
         .init(
             name: "xcode_native_windows",
             description: "Inspect top-level Xcode Accessibility windows and modal blockers without UI mutation.",
             timeoutSeconds: 15,
-            inputSchema: objectSchema()
+            inputSchema: objectSchema(),
+            annotations: readOnlyAnnotations
+        ),
+        .init(
+            name: "xcode_ide_status",
+            description: "Inspect whether Xcode.app is running, frontmost, and has open workspaces. Use before workspace-specific IDE calls when Codex needs GUI-first state. Examples: 1. {} to check process/workspace state. 2. Use this after xcode_native_state when deciding whether to ask the user to open Xcode.",
+            timeoutSeconds: 30,
+            inputSchema: objectSchema(),
+            annotations: readOnlyAnnotations
+        ),
+        .init(
+            name: "xcode_ide_workspace_info",
+            description: "Inspect the active or requested Xcode workspace document through Xcode.app without mutating UI state. Examples: 1. workspace_path=\"/Users/me/App/App.xcodeproj\". 2. {} when exactly one workspace is open.",
+            timeoutSeconds: 30,
+            inputSchema: objectSchema(
+                properties: [
+                    "workspace_path": stringSchema(description: "Optional path to an open .xcodeproj or .xcworkspace.")
+                ]
+            ),
+            annotations: readOnlyAnnotations
+        ),
+        .init(
+            name: "xcode_ide_list_schemes",
+            description: "List schemes from the active or requested Xcode workspace through Xcode.app. Examples: 1. workspace_path=\"/Users/me/App/App.xcworkspace\". 2. {} when one workspace is open and Codex needs exact scheme names.",
+            timeoutSeconds: 30,
+            inputSchema: objectSchema(
+                properties: [
+                    "workspace_path": stringSchema(description: "Optional path to an open .xcodeproj or .xcworkspace.")
+                ]
+            ),
+            annotations: readOnlyAnnotations
+        ),
+        .init(
+            name: "xcode_ide_list_destinations",
+            description: "List Xcode run destinations for the active or requested workspace. Examples: 1. workspace_path=\"/Users/me/App/App.xcodeproj\". 2. {} before choosing a destination_id for xcode_ide_test.",
+            timeoutSeconds: 30,
+            inputSchema: objectSchema(
+                properties: [
+                    "workspace_path": stringSchema(description: "Optional path to an open .xcodeproj or .xcworkspace.")
+                ]
+            ),
+            annotations: readOnlyAnnotations
         ),
         .init(
             name: "xcode_ide_preflight",
-            description: "Check Xcode GUI readiness, workspace, scheme, destination, and native modal blockers before IDE automation.",
+            description: "Check Xcode GUI readiness, workspace, scheme, destination, and native modal blockers before IDE automation. Examples: 1. workspace_path=\"/Users/me/App/App.xcodeproj\", scheme=\"App\". 2. workspace_path=\"/Users/me/App/App.xcworkspace\", scheme=\"AppTests\", destination_name=\"iPhone 16\".",
             timeoutSeconds: 30,
             inputSchema: objectSchema(
                 properties: [
@@ -44,11 +98,12 @@ enum XcodeToolCatalog {
                     "destination_name": stringSchema(description: "Optional Xcode run destination name to verify."),
                     "require_native_preflight": boolSchema(description: "Fail if the native helper or AX preflight is unavailable.", defaultValue: false)
                 ]
-            )
+            ),
+            annotations: readOnlyAnnotations
         ),
         .init(
             name: "xcode_ide_build",
-            description: "Build the active or requested Xcode scheme through Xcode.app IDE automation.",
+            description: "Build the active or requested Xcode scheme through Xcode.app IDE automation. Examples: 1. workspace_path=\"/Users/me/App/App.xcodeproj\", scheme=\"App\", destination_id=\"...\". 2. workspace_path=\"/Users/me/App/App.xcworkspace\", scheme=\"App\", destination_name=\"iPhone 16\".",
             timeoutSeconds: 600,
             inputSchema: objectSchema(
                 properties: [
@@ -59,11 +114,28 @@ enum XcodeToolCatalog {
                     "timeout_seconds": intSchema(description: "IDE build timeout in seconds.", defaultValue: 600)
                 ],
                 required: ["workspace_path", "scheme"]
-            )
+            ),
+            annotations: mutatingAnnotations
+        ),
+        .init(
+            name: "xcode_ide_test",
+            description: "Run tests for an open Xcode workspace through Xcode.app. Use this after xcode_ide_preflight succeeds. Examples: 1. workspace_path=\"/Users/me/App/App.xcodeproj\", scheme=\"App\", destination_id=\"...\". 2. workspace_path=\"/Users/me/App/App.xcworkspace\", scheme=\"AppTests\", destination_name=\"iPhone 16\".",
+            timeoutSeconds: 600,
+            inputSchema: objectSchema(
+                properties: [
+                    "workspace_path": stringSchema(description: "Path to .xcodeproj or .xcworkspace."),
+                    "scheme": stringSchema(description: "Scheme to test."),
+                    "destination_id": stringSchema(description: "Optional simulator/device identifier."),
+                    "destination_name": stringSchema(description: "Optional Xcode destination name."),
+                    "timeout_seconds": intSchema(description: "IDE test timeout in seconds.", defaultValue: 600)
+                ],
+                required: ["workspace_path", "scheme"]
+            ),
+            annotations: mutatingAnnotations
         ),
         .init(
             name: "xcode_ide_run",
-            description: "Run the active or requested Xcode scheme through Xcode.app IDE automation.",
+            description: "Run the active or requested Xcode scheme through Xcode.app IDE automation. Examples: 1. workspace_path=\"/Users/me/App/App.xcodeproj\", scheme=\"App\", destination_id=\"...\". 2. workspace_path=\"/Users/me/App/App.xcworkspace\", scheme=\"App\", destination_name=\"iPhone 16\".",
             timeoutSeconds: 180,
             inputSchema: objectSchema(
                 properties: [
@@ -74,7 +146,8 @@ enum XcodeToolCatalog {
                     "timeout_seconds": intSchema(description: "IDE run timeout in seconds.", defaultValue: 180)
                 ],
                 required: ["workspace_path", "scheme"]
-            )
+            ),
+            annotations: mutatingAnnotations
         ),
         .init(
             name: "xcode_run_app",
@@ -92,7 +165,8 @@ enum XcodeToolCatalog {
                     "timeout_seconds": intSchema(description: "End-to-end workflow timeout in seconds.", defaultValue: 900)
                 ],
                 required: ["project_path", "scheme"]
-            )
+            ),
+            annotations: mutatingAnnotations
         ),
         .init(
             name: "xcode_simulator_resolve",
@@ -105,21 +179,23 @@ enum XcodeToolCatalog {
                     "fixture": stringSchema(description: "Optional fixture JSON for deterministic validation.")
                 ],
                 required: ["name"]
-            )
+            ),
+            annotations: readOnlyAnnotations
         ),
         .init(
             name: "xcode_results_summary",
-            description: "Summarize an .xcresult bundle through bin/xcode results summarize.",
+            description: "Summarize an .xcresult bundle through bin/xcode results summarize. Examples: 1. path=\"/tmp/Test.xcresult\", kind=\"test-summary\". 2. path=\"/tmp/Build.xcresult\", kind=\"log\", log_type=\"build\".",
             timeoutSeconds: 60,
             inputSchema: objectSchema(
                 properties: [
                     "path": stringSchema(description: "Path to an .xcresult bundle."),
-                    "kind": stringSchema(description: "Summary kind: test-summary, build-results, content-availability, or log.", defaultValue: "test-summary"),
-                    "log_type": stringSchema(description: "Log type for kind=log: build, action, or console.", defaultValue: "build"),
+                    "kind": enumStringSchema(description: "Summary kind.", values: ["test-summary", "build-results", "content-availability", "log"], defaultValue: "test-summary", examples: ["test-summary", "build-results"]),
+                    "log_type": enumStringSchema(description: "Log type for kind=log.", values: ["build", "action", "console"], defaultValue: "build", examples: ["build"]),
                     "timeout_seconds": intSchema(description: "xcresulttool timeout in seconds.", defaultValue: 60)
                 ],
                 required: ["path"]
-            )
+            ),
+            annotations: readOnlyAnnotations
         ),
         .init(
             name: "xcode_warnings_summary",
@@ -131,7 +207,19 @@ enum XcodeToolCatalog {
                     "fail_on_new": boolSchema(description: "Reserved baseline-diff flag.", defaultValue: false)
                 ],
                 required: ["log"]
-            )
+            ),
+            annotations: readOnlyAnnotations
+        ),
+        .init(
+            name: "xcode_help",
+            description: "Return static Xcoder guidance for common agent routing questions. Examples: 1. topic=\"ide-vs-cli\" to choose GUI-first versus CLI fallback. 2. topic=\"build-json\" when Codex needs machine-readable build behavior.",
+            timeoutSeconds: 10,
+            inputSchema: objectSchema(
+                properties: [
+                    "topic": enumStringSchema(description: "Help topic to return.", values: helpTopics, defaultValue: "ide-vs-cli", examples: ["ide-vs-cli", "build-json"])
+                ]
+            ),
+            annotations: readOnlyAnnotations
         )
     ]
 
@@ -144,7 +232,7 @@ enum XcodeToolCatalog {
                 title: nil,
                 description: $0.description,
                 inputSchema: $0.inputSchema,
-                annotations: nil,
+                annotations: $0.annotations,
                 outputSchema: nil,
                 icons: nil
             )
@@ -160,10 +248,34 @@ enum XcodeToolCatalog {
                 [
                     "name": $0.name,
                     "description": $0.description,
-                    "timeout_seconds": $0.timeoutSeconds
+                    "timeout_seconds": $0.timeoutSeconds,
+                    "annotations": annotationJSON($0.annotations)
                 ]
             }
         ])
+    }
+
+    private static let readOnlyAnnotations = Tool.Annotations(
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false
+    )
+
+    private static let mutatingAnnotations = Tool.Annotations(
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: false,
+        openWorldHint: false
+    )
+
+    private static func annotationJSON(_ annotations: Tool.Annotations) -> [String: Any] {
+        [
+            "readOnlyHint": annotations.readOnlyHint ?? false,
+            "destructiveHint": annotations.destructiveHint ?? true,
+            "idempotentHint": annotations.idempotentHint ?? false,
+            "openWorldHint": annotations.openWorldHint ?? true
+        ]
     }
 
     private static func objectSchema(properties: [String: Value] = [:], required: [String] = []) -> Value {
@@ -178,13 +290,38 @@ enum XcodeToolCatalog {
         return .object(object)
     }
 
-    private static func stringSchema(description: String? = nil, defaultValue: String? = nil) -> Value {
+    private static func stringSchema(description: String? = nil, defaultValue: String? = nil, examples: [String] = []) -> Value {
         var object: [String: Value] = ["type": .string("string")]
         if let description {
             object["description"] = .string(description)
         }
         if let defaultValue {
             object["default"] = .string(defaultValue)
+        }
+        if !examples.isEmpty {
+            object["examples"] = .array(examples.map { .string($0) })
+        }
+        return .object(object)
+    }
+
+    private static func enumStringSchema(
+        description: String? = nil,
+        values: [String],
+        defaultValue: String? = nil,
+        examples: [String] = []
+    ) -> Value {
+        var object: [String: Value] = [
+            "type": .string("string"),
+            "enum": .array(values.map { .string($0) })
+        ]
+        if let description {
+            object["description"] = .string(description)
+        }
+        if let defaultValue {
+            object["default"] = .string(defaultValue)
+        }
+        if !examples.isEmpty {
+            object["examples"] = .array(examples.map { .string($0) })
         }
         return .object(object)
     }

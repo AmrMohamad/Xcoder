@@ -14,6 +14,7 @@ from xcode_common import EXIT_CODES, emit_failure, emit_success, plugin_identity
 COMMAND_TO_SCRIPT = {
     "build": "xcode_build_cache.py",
     "doctor": "xcode_doctor.py",
+    "help": "xcode_help.py",
     "ide": "xcode_ide_automation.py",
     "simulator": "xcode_simulator.py",
     "results": "xcode_results.py",
@@ -44,6 +45,14 @@ def parser() -> argparse.ArgumentParser:
     root.add_argument("command", nargs="?", choices=sorted([*COMMAND_TO_SCRIPT, "mcp"]), help="Workflow command to run.")
     root.add_argument("args", nargs=argparse.REMAINDER, help="Arguments for the selected command.")
     return root
+
+
+def transform_build_args(forwarded: list[str]) -> list[str]:
+    wants_json = "--json" in forwarded
+    result = [item for item in forwarded if item != "--json"]
+    if wants_json and "--dry-run" in result and "--json-dry-run" not in result:
+        result.append("--json-dry-run")
+    return result
 
 
 def main() -> int:
@@ -99,10 +108,7 @@ def main() -> int:
 
     forwarded = list(args.args)
     if args.command == "build":
-        if "--json" in forwarded and "--json-dry-run" not in forwarded:
-            forwarded = ["--json-dry-run" if item == "--json" else item for item in forwarded]
-        elif "--json" in forwarded:
-            forwarded = [item for item in forwarded if item != "--json"]
+        forwarded = transform_build_args(forwarded)
     elif "--json" in forwarded:
         forwarded = [item for item in forwarded if item != "--json"]
 

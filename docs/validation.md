@@ -10,6 +10,8 @@ From the repository root:
 python3 -m json.tool .codex-plugin/plugin.json >/dev/null
 python3 -m json.tool .mcp.json >/dev/null
 python3 -m py_compile scripts/*.py
+python3 -m pytest tests  # or: uvx pytest tests
+swift test --package-path native/XcodeMCPServer
 test -x bin/xcode
 test -x bin/xcode-mcp
 bin/xcode --help
@@ -18,6 +20,12 @@ bin/xcode mcp bootstrap --json
 bin/xcode mcp version --json
 bin/xcode mcp list-tools --json
 bin/xcode doctor --json
+```
+
+The combined local release gate is:
+
+```bash
+scripts/release_gate.sh
 ```
 
 First-use MCP bootstrap is mandatory when the `mcp__xcode__*` tools are not visible to Codex. Run `bin/xcode mcp bootstrap --json`, then restart Codex.
@@ -60,6 +68,7 @@ with zipfile.ZipFile(path) as archive:
             "__MACOSX",
             ".DS_Store",
             "__pycache__",
+            ".pytest_cache",
             ".codex/xcode/artifacts",
             ".build",
             ".swiftpm",

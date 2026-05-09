@@ -26,6 +26,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--artifact-dir", default=None, help="Base artifact directory. Defaults to .codex/xcode/artifacts.")
     parser.add_argument("--log-dir", default=None, help=argparse.SUPPRESS)
+    parser.add_argument("--json", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--json-dry-run", action="store_true", help=argparse.SUPPRESS)
     args, runner_args = parser.parse_known_args()
     args.runner_args = runner_args

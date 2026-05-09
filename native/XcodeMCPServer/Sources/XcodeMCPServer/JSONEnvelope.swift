@@ -14,6 +14,11 @@ enum JSONEnvelope {
     }
 
     static func failure(errorType: String, summary: String, details: [String: Any]? = nil) -> String {
+        let recovery = RecoveryCatalog.metadata(for: errorType)
+        var enrichedDetails = details ?? [:]
+        for (key, value) in recovery.dictionary where enrichedDetails[key] == nil {
+            enrichedDetails[key] = value
+        }
         var payload: [String: Any] = [
             "schema_version": XcodeMCPConstants.pluginEnvelopeSchemaVersion,
             "ok": false,
@@ -23,12 +28,18 @@ enum JSONEnvelope {
             "summary": summary,
             "artifacts": [:],
             "warnings": [],
-            "errors": [],
+            "errors": [
+                [
+                    "error_type": errorType,
+                    "message": summary,
+                    "recovery": recovery.recovery,
+                    "transient": recovery.transient,
+                    "retry_after_seconds": recovery.retryAfterSeconds.map { $0 as Any } ?? NSNull()
+                ]
+            ],
             "next_actions": []
         ]
-        if let details {
-            payload["details"] = details
-        }
+        payload["details"] = enrichedDetails
         return compactJSONString(payload)
     }
 

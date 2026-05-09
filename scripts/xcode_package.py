@@ -15,6 +15,7 @@ EXCLUDED_DIR_NAMES = {
     ".git",
     "__MACOSX",
     "__pycache__",
+    ".pytest_cache",
     ".build",
     ".swiftpm",
     "DerivedData",
@@ -50,13 +51,21 @@ REQUIRED_PACKAGE_FILES = {
     "native/XcodeMCPServer/Sources/XcodeMCPServer/Constants.swift",
     "native/XcodeMCPServer/Sources/XcodeMCPServer/JSONEnvelope.swift",
     "native/XcodeMCPServer/Sources/XcodeMCPServer/ProcessExecutor.swift",
+    "native/XcodeMCPServer/Sources/XcodeMCPServer/RecoveryCatalog.swift",
     "native/XcodeMCPServer/Sources/XcodeMCPServer/ServerIntrospection.swift",
     "native/XcodeMCPServer/Sources/XcodeMCPServer/XcodeBridge.swift",
     "native/XcodeMCPServer/Sources/XcodeMCPServer/XcodeMCPServer.swift",
     "native/XcodeMCPServer/Sources/XcodeMCPServer/XcodeToolArguments.swift",
     "native/XcodeMCPServer/Sources/XcodeMCPServer/XcodeToolCatalog.swift",
     "native/XcodeMCPServer/Sources/XcodeMCPServer/XcodeToolError.swift",
+    "scripts/xcode_bootstrap.py",
+    "scripts/xcode_error_catalog.py",
+    "scripts/xcode_help.py",
     "scripts/xcode_post_tool_hook.py",
+    "scripts/release_gate.sh",
+    "tests/test_envelope.py",
+    "tests/test_error_recovery.py",
+    "tests/test_help.py",
 }
 
 REQUIRED_EXECUTABLE_FILES = {
@@ -175,7 +184,7 @@ def zip_command(output: str) -> int:
 def bad_archive_reason(name: str) -> str | None:
     path = Path(name)
     parts = path.parts
-    if any(part in {"__MACOSX", "__pycache__", ".build", ".swiftpm", "DerivedData"} for part in parts):
+    if any(part in {"__MACOSX", "__pycache__", ".pytest_cache", ".build", ".swiftpm", "DerivedData"} for part in parts):
         return "excluded directory in archive"
     if any(part == ".DS_Store" for part in parts):
         return "excluded file in archive"
