@@ -1,3 +1,4 @@
+import Foundation
 import MCP
 
 struct XcodeBridgeResult {
@@ -7,13 +8,16 @@ struct XcodeBridgeResult {
 
 actor XcodeBridge {
     private let processExecutor: ProcessExecutor
+    private let registry: ActiveProcessRegistry
     private var isToolRunning = false
-    private var executionWaiters: [CheckedContinuation<Void, Never>] = []
+    private var executionWaiters: [ExecutionWaiter] = []
 
-    init(paths: PluginPaths = PluginPaths()) {
+    init(paths: PluginPaths = PluginPaths(), registry: ActiveProcessRegistry = .shared) {
+        self.registry = registry
         self.processExecutor = ProcessExecutor(
             executableURL: paths.xcodeCLI,
-            currentDirectoryURL: paths.pluginRoot
+            currentDirectoryURL: paths.pluginRoot,
+            registry: registry
         )
     }
 
@@ -28,12 +32,17 @@ actor XcodeBridge {
         }
 
         let argv = try XcodeToolArguments.argv(for: name, arguments: args)
-        await acquireExecutionSlot()
-        defer {
-            releaseExecutionSlot()
-        }
+        try await acquireExecutionSlot()
 
-        let result = try await processExecutor.run(arguments: argv, timeoutSeconds: tool.timeoutSeconds)
+        let result: ProcessResult
+        do {
+            try Task.checkCancellation()
+            result = try await processExecutor.run(arguments: argv, timeoutSeconds: tool.timeoutSeconds)
+        } catch {
+            await releaseExecutionSlot()
+            throw error
+        }
+        await releaseExecutionSlot()
 
         guard result.exitCode == 0 else {
             if let stdoutJSON = JSONEnvelope.compactValidatedJSON(result.stdout) {
@@ -63,24 +72,54 @@ actor XcodeBridge {
         return XcodeBridgeResult(json: json, isError: false)
     }
 
-    private func acquireExecutionSlot() async {
+    private func acquireExecutionSlot() async throws {
+        try Task.checkCancellation()
         if !isToolRunning {
             isToolRunning = true
+            await registry.markToolRunning(true)
             return
         }
 
-        await withCheckedContinuation { continuation in
-            executionWaiters.append(continuation)
+        let waiterID = UUID()
+        await registry.incrementQueuedToolCount()
+        do {
+            try await withTaskCancellationHandler {
+                try await withCheckedThrowingContinuation { continuation in
+                    executionWaiters.append(ExecutionWaiter(id: waiterID, continuation: continuation))
+                }
+            } onCancel: {
+                Task {
+                    await self.cancelExecutionWaiter(id: waiterID)
+                }
+            }
+        } catch {
+            await registry.decrementQueuedToolCount()
+            throw error
         }
+        await registry.decrementQueuedToolCount()
     }
 
-    private func releaseExecutionSlot() {
+    private func releaseExecutionSlot() async {
         if executionWaiters.isEmpty {
             isToolRunning = false
+            await registry.markToolRunning(false)
             return
         }
 
         let next = executionWaiters.removeFirst()
-        next.resume()
+        next.continuation.resume()
     }
+
+    private func cancelExecutionWaiter(id: UUID) async {
+        guard let index = executionWaiters.firstIndex(where: { $0.id == id }) else {
+            return
+        }
+        let waiter = executionWaiters.remove(at: index)
+        waiter.continuation.resume(throwing: CancellationError())
+    }
+}
+
+private struct ExecutionWaiter {
+    let id: UUID
+    let continuation: CheckedContinuation<Void, Error>
 }

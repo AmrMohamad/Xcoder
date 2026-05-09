@@ -39,6 +39,8 @@ These tools are wrappers over `bin/xcode`. They are the primary discovery surfac
 
 Use `xcode_help` when Codex needs canonical local guidance before choosing a route. Supported topics are `first-time`, `ide-vs-cli`, `fail-recovery`, `scheme-not-testable`, `destination-ambiguous`, `build-json`, and `package-release`.
 
+For MCP process diagnostics, use `bin/xcode mcp health --json`. Health is intentionally CLI-only; when a stdio server is running it reads the server's lightweight published state file and reports that server's pid, uptime, RSS when available, active child pid, queued tool count, and running state. If no fresh running-server state exists, the command reports a one-shot `self_probe` payload instead of inventing active-child state.
+
 ## Read Project Context First
 
 ```bash

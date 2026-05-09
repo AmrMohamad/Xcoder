@@ -17,8 +17,12 @@ struct XcodeMCPServer {
             print(ServerIntrospection.doctorJSON())
             return
         }
+        if cli.contains("--health") {
+            print(await ServerHealth.publishedOrProbeHealthJSON())
+            return
+        }
         guard cli.isEmpty || cli.contains("--stdio") else {
-            print(JSONEnvelope.failure(errorType: "usage_error", summary: "Use --stdio, --version --json, --list-tools --json, or --doctor --json."))
+            print(JSONEnvelope.failure(errorType: "usage_error", summary: "Use --stdio, --version --json, --list-tools --json, --doctor --json, or --health --json."))
             Foundation.exit(2)
         }
 
@@ -31,7 +35,9 @@ struct XcodeMCPServer {
             )
         )
 
-        let bridge = XcodeBridge()
+        let registry = ActiveProcessRegistry.shared
+        let bridge = XcodeBridge(registry: registry)
+        let healthPublisher = ServerHealth.startRuntimePublisher(registry: registry)
 
         await server.withMethodHandler(ListTools.self) { _ in
             ListTools.Result(tools: XcodeToolCatalog.mcpTools)
@@ -52,7 +58,30 @@ struct XcodeMCPServer {
         }
 
         let transport = StdioTransport()
+        let signalSources = installSignalHandlers(server: server, registry: registry)
+        defer {
+            healthPublisher.cancel()
+            ServerHealth.clearPublishedHealth()
+            signalSources.forEach { $0.cancel() }
+        }
         try await server.start(transport: transport)
         await server.waitUntilCompleted()
+    }
+
+    private static func installSignalHandlers(server: Server, registry: ActiveProcessRegistry) -> [DispatchSourceSignal] {
+        [SIGTERM, SIGINT].map { signalNumber in
+            signal(signalNumber, SIG_IGN)
+            let source = DispatchSource.makeSignalSource(signal: signalNumber, queue: .main)
+            source.setEventHandler {
+                Task {
+                    await registry.terminateActiveProcessTree()
+                    await server.stop()
+                    ServerHealth.clearPublishedHealth()
+                    Foundation.exit(0)
+                }
+            }
+            source.resume()
+            return source
+        }
     }
 }

@@ -10,6 +10,13 @@ struct ProcessResult {
 struct ProcessExecutor {
     let executableURL: URL
     let currentDirectoryURL: URL
+    let registry: ActiveProcessRegistry
+
+    init(executableURL: URL, currentDirectoryURL: URL, registry: ActiveProcessRegistry = .shared) {
+        self.executableURL = executableURL
+        self.currentDirectoryURL = currentDirectoryURL
+        self.registry = registry
+    }
 
     func run(arguments: [String], timeoutSeconds: Int) async throws -> ProcessResult {
         guard FileManager.default.isExecutableFile(atPath: executableURL.path) else {
@@ -28,13 +35,22 @@ struct ProcessExecutor {
         process.standardError = stderrPipe
 
         try process.run()
+        let processID = process.processIdentifier
+        await registry.register(processID: processID, arguments: arguments)
 
-        return try await waitForProcessOrTimeout(
-            process,
-            stdoutPipe: stdoutPipe,
-            stderrPipe: stderrPipe,
-            timeoutSeconds: timeoutSeconds
-        )
+        do {
+            let result = try await waitForProcessOrTimeout(
+                process,
+                stdoutPipe: stdoutPipe,
+                stderrPipe: stderrPipe,
+                timeoutSeconds: timeoutSeconds
+            )
+            await registry.unregister(processID: processID)
+            return result
+        } catch {
+            await registry.unregister(processID: processID)
+            throw error
+        }
     }
 }
 
@@ -44,70 +60,71 @@ private func waitForProcessOrTimeout(
     stderrPipe: Pipe,
     timeoutSeconds: Int
 ) async throws -> ProcessResult {
-    try await withCheckedThrowingContinuation { continuation in
-        let completion = ProcessCompletionGate()
-        let timer = DispatchSource.makeTimerSource(queue: DispatchQueue.global(qos: .utility))
+    let stdoutTask = drainOutput(stdoutPipe.fileHandleForReading)
+    let stderrTask = drainOutput(stderrPipe.fileHandleForReading)
+    let timeoutNanoseconds = UInt64(max(timeoutSeconds, 1)) * 1_000_000_000
+    let startedAt = DispatchTime.now().uptimeNanoseconds
 
-        process.terminationHandler = { _ in
-            completion.runOnce {
-                timer.cancel()
-                let (stdout, stderr) = drainOutput(stdoutPipe: stdoutPipe, stderrPipe: stderrPipe)
-                continuation.resume(returning: ProcessResult(exitCode: Int(process.terminationStatus), stdout: stdout, stderr: stderr))
-            }
-        }
-
-        timer.schedule(deadline: .now() + .seconds(max(timeoutSeconds, 1)))
-        timer.setEventHandler {
-            completion.runOnce {
+    return try await withTaskCancellationHandler {
+        while process.isRunning {
+            if DispatchTime.now().uptimeNanoseconds - startedAt >= timeoutNanoseconds {
                 terminateProcessTree(process)
                 process.waitUntilExit()
-                _ = drainOutput(stdoutPipe: stdoutPipe, stderrPipe: stderrPipe)
-                continuation.resume(throwing: XcodeToolError.timeout)
+                _ = await stdoutTask.value
+                _ = await stderrTask.value
+                throw XcodeToolError.timeout
             }
+            try await Task.sleep(nanoseconds: 50_000_000)
         }
-        timer.resume()
 
-        if !process.isRunning {
-            completion.runOnce {
-                timer.cancel()
-                let (stdout, stderr) = drainOutput(stdoutPipe: stdoutPipe, stderrPipe: stderrPipe)
-                continuation.resume(returning: ProcessResult(exitCode: Int(process.terminationStatus), stdout: stdout, stderr: stderr))
-            }
-        }
+        let stdout = await stdoutTask.value
+        let stderr = await stderrTask.value
+        return ProcessResult(exitCode: Int(process.terminationStatus), stdout: stdout, stderr: stderr)
+    } onCancel: {
+        terminateProcessTree(process)
     }
 }
 
-private final class ProcessCompletionGate: @unchecked Sendable {
-    private let lock = NSLock()
-    private var completed = false
+private let maxCapturedOutputBytes = 8 * 1024 * 1024
 
-    func runOnce(_ body: @Sendable () -> Void) {
-        lock.lock()
-        if completed {
-            lock.unlock()
-            return
+private func drainOutput(_ fileHandle: FileHandle) -> Task<String, Never> {
+    Task.detached(priority: .utility) {
+        var data = Data()
+        while true {
+            let chunk = fileHandle.availableData
+            if chunk.isEmpty {
+                break
+            }
+            appendBounded(&data, chunk, limit: maxCapturedOutputBytes)
         }
-        completed = true
-        lock.unlock()
-        body()
+        return String(data: data, encoding: .utf8) ?? ""
     }
 }
 
-private func drainOutput(stdoutPipe: Pipe, stderrPipe: Pipe) -> (String, String) {
-    let stdout = String(data: stdoutPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
-    let stderr = String(data: stderrPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
-    return (stdout, stderr)
+private func appendBounded(_ data: inout Data, _ chunk: Data, limit: Int) {
+    guard data.count < limit else {
+        return
+    }
+    let remaining = limit - data.count
+    if chunk.count <= remaining {
+        data.append(chunk)
+    } else {
+        data.append(chunk.prefix(remaining))
+    }
 }
 
 private func terminateProcessTree(_ process: Process) {
-    let rootPID = process.processIdentifier
+    terminateProcessTree(rootPID: process.processIdentifier)
+}
+
+func terminateProcessTree(rootPID: pid_t) {
     let children = descendantProcessIDs(of: rootPID)
 
     for pid in children.reversed() where processIsAlive(pid) {
         kill(pid, SIGTERM)
     }
-    if process.isRunning {
-        process.terminate()
+    if processIsAlive(rootPID) {
+        kill(rootPID, SIGTERM)
     }
 
     Thread.sleep(forTimeInterval: 1.0)
@@ -115,7 +132,7 @@ private func terminateProcessTree(_ process: Process) {
     for pid in children.reversed() where processIsAlive(pid) {
         kill(pid, SIGKILL)
     }
-    if process.isRunning {
+    if processIsAlive(rootPID) {
         kill(rootPID, SIGKILL)
     }
 }
@@ -154,7 +171,7 @@ private func childProcessIDs(of pid: pid_t) -> [pid_t] {
         .compactMap { pid_t($0) }
 }
 
-private func processIsAlive(_ pid: pid_t) -> Bool {
+func processIsAlive(_ pid: pid_t) -> Bool {
     if kill(pid, 0) == 0 {
         return true
     }

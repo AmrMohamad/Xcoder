@@ -29,6 +29,7 @@ COMMAND_TO_SCRIPT = {
 MCP_SUBCOMMAND_TO_ARGS = {
     "bootstrap": ["--bootstrap"],
     "doctor": ["--doctor"],
+    "health": ["--health"],
     "list-tools": ["--list-tools"],
     "version": ["--version"],
     "stdio": ["--stdio"],
@@ -76,7 +77,7 @@ def main() -> int:
             return emit_failure(
                 "mcp",
                 "usage_error",
-                "Use: bin/xcode mcp bootstrap|doctor|list-tools|version|stdio [--json]",
+                "Use: bin/xcode mcp bootstrap|doctor|health|list-tools|version|stdio [--json]",
                 exit_code=EXIT_CODES["usage_error"],
             )
         subcommand = forwarded[0]

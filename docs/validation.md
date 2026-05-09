@@ -18,6 +18,7 @@ bin/xcode --help
 bin/xcode --version
 bin/xcode mcp bootstrap --json
 bin/xcode mcp version --json
+bin/xcode mcp health --json
 bin/xcode mcp list-tools --json
 bin/xcode doctor --json
 ```

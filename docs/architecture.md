@@ -95,6 +95,8 @@ xcode_help
 
 The server is intentionally thin. It validates typed arguments, rejects free-form execution keys such as `command`, `shell`, `args`, `script`, and `raw`, runs `bin/xcode` through `Process` direct argv, enforces MCP-side timeouts, and returns the existing `xcode-plugin.v0.3` envelope as JSON text. Tool annotations mark read-only discovery/help tools separately from mutating build/test/run workflows, but the annotations are hints only. It must not call Apple developer tools directly.
 
+The MCP server remains a Codex-managed stdio child process, not a daemon or warm background service. It intentionally avoids preloading Xcode/AppKit/simulator state so idle RSS stays low. During tool calls, stdout/stderr are drained while the child process runs, and active `bin/xcode` descendants are terminated on timeout or MCP server shutdown. The running server publishes a tiny temp-file health snapshot for `bin/xcode mcp health --json`; it does not expose health as an MCP tool.
+
 Minimum OS policy:
 
 ```text
