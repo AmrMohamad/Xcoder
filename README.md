@@ -93,11 +93,11 @@ The terminal is still the transport for `bin/xcode`, but explicit plugin invocat
 
 The MCP server remains a Codex-managed stdio child process, not a daemon. It drains child stdout/stderr while `bin/xcode` runs, cleans up active child processes on shutdown, and publishes lightweight CLI-only health state for diagnostics.
 
-For v0.4.0 packages:
+For v0.4.5 packages:
 
 ```bash
-bin/xcode package zip --output /tmp/xcode-plugin-0.4.0.zip --json
-bin/xcode package audit --zip /tmp/xcode-plugin-0.4.0.zip --json
+bin/xcode package zip --output /tmp/xcode-plugin-0.4.5.zip --json
+bin/xcode package audit --zip /tmp/xcode-plugin-0.4.5.zip --json
 ```
 
 ## What It Provides

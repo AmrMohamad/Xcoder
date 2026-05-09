@@ -2,7 +2,7 @@ import Foundation
 
 enum XcodeMCPConstants {
     static let serverName = "xcode"
-    static let serverVersion = "0.4.0"
+    static let serverVersion = "0.4.5"
     static let mcpServerSchemaVersion = "xcode-mcp-server.v0.1"
     static let pluginEnvelopeSchemaVersion = "xcode-plugin.v0.3"
     static let sdkName = "modelcontextprotocol/swift-sdk"
