@@ -86,7 +86,7 @@ Codex installs plugins into its plugin cache. For local development, prefer rein
 
 ```bash
 SOURCE="$(pwd)"
-CACHE="${CODEX_HOME:-$HOME/.codex}/plugins/cache/local/xcode/0.4.5"
+CACHE="${CODEX_HOME:-$HOME/.codex}/plugins/cache/local/xcode/0.5.0"
 
 mkdir -p "$CACHE"
 rsync -a --delete \
@@ -132,7 +132,7 @@ Run `native helper bundle` after every helper rebuild. It packages `bin/XcodeNat
 
 ## Bundled MCP Server
 
-Xcoder v0.4.5 ships a Swift stdio MCP server. Build it once and copy the release binary into `bin/`:
+Xcoder v0.5.0 ships a Swift stdio MCP server. Build it once and copy the release binary into `bin/`:
 
 ```bash
 swift build -c release --package-path native/XcodeMCPServer
@@ -152,14 +152,14 @@ The wrapper also enforces the macOS 14.0 minimum before it executes the Swift bi
 Create a clean zip from the repository root:
 
 ```bash
-bin/xcode package zip --output /tmp/xcode-plugin-0.4.5.zip --json
-bin/xcode package audit --zip /tmp/xcode-plugin-0.4.5.zip --json
+bin/xcode package zip --output /tmp/xcode-plugin-0.5.0.zip --json
+bin/xcode package audit --zip /tmp/xcode-plugin-0.5.0.zip --json
 ```
 
 The package command writes entries under:
 
 ```text
-xcode/0.4.5/
+xcode/0.5.0/
 ```
 
 The audit fails if the archive contains macOS metadata, Python caches, Swift `.build` output, local artifacts, nested zips, wrong root prefixes, missing package manifest, missing public binaries, or non-executable public binaries.

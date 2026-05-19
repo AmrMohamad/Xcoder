@@ -102,11 +102,11 @@ The MCP server remains a Codex-managed stdio child process, not a daemon. It dra
 
 Xcoder includes a typed Xcode menu-control layer for safe UI actions. `bin/xcode ide menu-catalog --json` lists stable `action_id` values, shortcuts, safety classes, and blocked dynamic/external-effect entries. `bin/xcode ide menu-perform --action-id <id> --json` executes only cataloged, implemented actions; it never accepts raw menu paths or arbitrary Accessibility selectors, and destructive actions require an explicit destructive flag.
 
-For v0.4.5 packages:
+For v0.5.0 packages:
 
 ```bash
-bin/xcode package zip --output /tmp/xcode-plugin-0.4.5.zip --json
-bin/xcode package audit --zip /tmp/xcode-plugin-0.4.5.zip --json
+bin/xcode package zip --output /tmp/xcode-plugin-0.5.0.zip --json
+bin/xcode package audit --zip /tmp/xcode-plugin-0.5.0.zip --json
 ```
 
 ## What It Provides
