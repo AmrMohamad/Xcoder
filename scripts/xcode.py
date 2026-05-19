@@ -24,6 +24,7 @@ COMMAND_TO_SCRIPT = {
     "native": "xcode_native.py",
     "package": "xcode_package.py",
     "workflow": "xcode_workflow.py",
+    "distribution": "xcode_distribution.py",
 }
 
 MCP_SUBCOMMAND_TO_ARGS = {

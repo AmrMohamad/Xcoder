@@ -24,6 +24,151 @@ from xcode_ide_menu_catalog import (
 
 SCRIPT_TIMEOUT_PADDING = 20
 VALID_ACTIONS = {"build", "clean", "test", "run", "debug", "stop"}
+EXPECTED_DISTRIBUTION_STEP_TITLE = "Select a method for distribution:"
+DEFAULT_MAX_SAFE_STEPS = 4
+DISTRIBUTION_METHODS = [
+    "App Store Connect",
+    "TestFlight Internal Only",
+    "Release Testing",
+    "Enterprise",
+    "Debugging",
+    "Custom",
+]
+CUSTOM_DISTRIBUTION_ROUTES = [
+    "App Store Connect",
+    "Release Testing",
+    "Enterprise",
+    "Debugging",
+]
+CUSTOM_ROUTE_TITLE_PREFIXES = {
+    "App Store Connect": "App Store Connect,",
+    "Release Testing": "Release Testing,",
+    "Enterprise": "Enterprise,",
+    "Debugging": "Debugging,",
+}
+METHOD_DESCRIPTION_HINTS = {
+    "App Store Connect": ["upload app to app store connect"],
+    "TestFlight Internal Only": ["internal testing with testflight"],
+    "Release Testing": ["ad hoc distribute to registered devices"],
+    "Enterprise": ["distribute to an enterprise organization"],
+    "Debugging": ["development signing to registered devices"],
+    "Custom": ["use custom options"],
+}
+METHOD_CONFIRM_BUTTONS = {
+    "App Store Connect": "Distribute",
+    "TestFlight Internal Only": "Distribute",
+    "Release Testing": "Distribute",
+    "Enterprise": "Distribute",
+    "Debugging": "Distribute",
+    "Custom": "Next",
+}
+FINAL_DISTRIBUTION_ACTION_TITLES = {
+    "Distribute",
+    "Export",
+    "Upload",
+    "Submit",
+}
+SAFE_DISTRIBUTION_NAVIGATION_TITLES = {
+    "Cancel",
+    "Previous",
+    "Back",
+}
+SAFE_PROBE_READY_TITLES = {
+    "Next",
+    *FINAL_DISTRIBUTION_ACTION_TITLES,
+}
+PHASE_KIND_METHOD_SELECTION = "method_selection"
+PHASE_KIND_CUSTOM_METHOD_SELECTION = "custom_method_selection"
+PHASE_KIND_CUSTOM_DESTINATION_SELECTION = "custom_destination_selection"
+PHASE_KIND_CUSTOM_OPTIONS = "custom_options"
+PHASE_KIND_REVIEW = "review"
+PHASE_KIND_ERROR = "error"
+PHASE_KIND_DOWNSTREAM = "downstream_distribution"
+CUSTOM_DESTINATION_VALUES = {
+    "upload": "Upload",
+    "export": "Export",
+}
+CHECKBOX_OPTION_TITLES = {
+    "strip_swift_symbols": "Strip Swift symbols",
+    "include_manifest": "Include manifest for over-the-air installation",
+}
+PHASE_CATALOG: dict[str, dict[str, Any]] = {
+    EXPECTED_DISTRIBUTION_STEP_TITLE: {
+        "phase_id": "distribution_method_selection",
+        "phase_kind": PHASE_KIND_METHOD_SELECTION,
+        "route_context": {"top_level_method": None, "custom_route": None},
+    },
+    "Upload for App Store Connect:": {
+        "phase_id": "upload_for_app_store_connect",
+        "phase_kind": PHASE_KIND_DOWNSTREAM,
+        "route_context": {"top_level_method": "App Store Connect", "custom_route": None},
+    },
+    "Upload for TestFlight (Internal Testing Only):": {
+        "phase_id": "upload_for_testflight_internal_only",
+        "phase_kind": PHASE_KIND_DOWNSTREAM,
+        "route_context": {"top_level_method": "TestFlight Internal Only", "custom_route": None},
+    },
+    "Export for Release Testing (Ad Hoc):": {
+        "phase_id": "export_for_release_testing_ad_hoc",
+        "phase_kind": PHASE_KIND_DOWNSTREAM,
+        "route_context": {"top_level_method": "Release Testing", "custom_route": None},
+    },
+    "Export for Enterprise Distribution:": {
+        "phase_id": "export_for_enterprise_distribution",
+        "phase_kind": PHASE_KIND_DOWNSTREAM,
+        "route_context": {"top_level_method": "Enterprise", "custom_route": None},
+    },
+    "Export for Debugging (Release Testing):": {
+        "phase_id": "export_for_debugging_release_testing",
+        "phase_kind": PHASE_KIND_DOWNSTREAM,
+        "route_context": {"top_level_method": "Debugging", "custom_route": None},
+    },
+    "Select a method of distribution:": {
+        "phase_id": "custom_distribution_route_selection",
+        "phase_kind": PHASE_KIND_CUSTOM_METHOD_SELECTION,
+        "route_context": {"top_level_method": "Custom", "custom_route": None},
+    },
+    "Select a destination:": {
+        "phase_id": "custom_app_store_connect_destination_selection",
+        "phase_kind": PHASE_KIND_CUSTOM_DESTINATION_SELECTION,
+        "route_context": {"top_level_method": "Custom", "custom_route": "App Store Connect"},
+    },
+    "Release Testing distribution options:": {
+        "phase_id": "custom_release_testing_distribution_options",
+        "phase_kind": PHASE_KIND_CUSTOM_OPTIONS,
+        "route_context": {"top_level_method": "Custom", "custom_route": "Release Testing"},
+    },
+    "Enterprise distribution options:": {
+        "phase_id": "custom_enterprise_distribution_options",
+        "phase_kind": PHASE_KIND_CUSTOM_OPTIONS,
+        "route_context": {"top_level_method": "Custom", "custom_route": "Enterprise"},
+    },
+    "Debugging distribution options:": {
+        "phase_id": "custom_debugging_distribution_options",
+        "phase_kind": PHASE_KIND_CUSTOM_OPTIONS,
+        "route_context": {"top_level_method": "Custom", "custom_route": "Debugging"},
+    },
+    "Preparing app:": {
+        "phase_id": "preparing_app",
+        "phase_kind": PHASE_KIND_DOWNSTREAM,
+        "route_context": {"top_level_method": None, "custom_route": None},
+    },
+    "Preparing app record:": {
+        "phase_id": "preparing_app_record",
+        "phase_kind": PHASE_KIND_DOWNSTREAM,
+        "route_context": {"top_level_method": None, "custom_route": None},
+    },
+    "Review MazayaStg.ipa content:": {
+        "phase_id": "review_ipa_content",
+        "phase_kind": PHASE_KIND_REVIEW,
+        "route_context": {"top_level_method": None, "custom_route": None},
+    },
+    "An error was encountered:": {
+        "phase_id": "distribution_error",
+        "phase_kind": PHASE_KIND_ERROR,
+        "route_context": {"top_level_method": None, "custom_route": None},
+    },
+}
 
 
 def apple_string(value: str) -> str:
@@ -723,6 +868,1501 @@ def menu_press_script(action_item: MenuAction) -> str:
     return "\n".join(lines)
 
 
+def native_menu_press(action_item: MenuAction) -> dict[str, Any]:
+    menu_path_json = json.dumps(list(action_item.menu_path), separators=(",", ":"))
+    return run_command(
+        [
+            str(plugin_root() / "bin" / "xcode"),
+            "native",
+            "ax",
+            "press-menu",
+            "--menu-path-json",
+            menu_path_json,
+            "--json",
+        ],
+        timeout_seconds=20,
+    )
+
+
+def native_press_menu_path(menu_path: list[str]) -> dict[str, Any]:
+    return run_command(
+        [
+            str(plugin_root() / "bin" / "xcode"),
+            "native",
+            "ax",
+            "press-menu",
+            "--menu-path-json",
+            json.dumps(menu_path, separators=(",", ":")),
+            "--json",
+        ],
+        timeout_seconds=20,
+    )
+
+
+def native_ax_inspect(*, window_title_contains: str | None = None, max_depth: int = 4) -> dict[str, Any]:
+    command = [
+        str(plugin_root() / "bin" / "xcode"),
+        "native",
+        "ax",
+        "inspect",
+        "--max-depth",
+        str(max_depth),
+        "--json",
+    ]
+    if window_title_contains:
+        command.extend(["--window-title-contains", window_title_contains])
+    return run_command(command, timeout_seconds=25)
+
+
+def native_press_button(*, title: str, window_title_contains: str | None = None) -> dict[str, Any]:
+    command = [
+        str(plugin_root() / "bin" / "xcode"),
+        "native",
+        "ax",
+        "press-button",
+        "--title",
+        title,
+        "--json",
+    ]
+    if window_title_contains:
+        command.extend(["--window-title-contains", window_title_contains])
+    return run_command(command, timeout_seconds=20)
+
+
+def native_press_control(*, title: str, role: str, window_title_contains: str | None = None) -> dict[str, Any]:
+    command = [
+        str(plugin_root() / "bin" / "xcode"),
+        "native",
+        "ax",
+        "press-control",
+        "--role",
+        role,
+        "--title",
+        title,
+        "--json",
+    ]
+    if window_title_contains:
+        command.extend(["--window-title-contains", window_title_contains])
+    return run_command(command, timeout_seconds=20)
+
+
+def parse_native_json(result: dict[str, Any]) -> dict[str, Any] | None:
+    try:
+        parsed = json.loads(result["stdout"])
+    except json.JSONDecodeError:
+        return None
+    return parsed if isinstance(parsed, dict) else None
+
+
+def finish_native_result(
+    result: dict[str, Any],
+    *,
+    success_summary: str,
+    failure_summary: str,
+    extra_data: dict[str, Any] | None = None,
+    next_actions: list[str] | None = None,
+) -> int:
+    native_payload = parse_native_json(result)
+    data = dict(extra_data or {})
+    if native_payload is not None:
+        data["native"] = native_payload
+    else:
+        data["stdout_tail"] = compact_output(result["stdout"])
+        data["stderr_tail"] = compact_output(result["stderr"])
+    if result["exit_code"] == 0 and isinstance(native_payload, dict) and native_payload.get("ok") is True:
+        return payload("success", success_summary, data=data, next_actions=next_actions)
+    error_type = "xcode_ide_automation_failed"
+    if isinstance(native_payload, dict):
+        error_type = str(native_payload.get("error_type") or error_type)
+    return payload(
+        "failure",
+        failure_summary,
+        data=data,
+        warnings=[compact_output(result["stderr"])] if result["stderr"].strip() else [],
+        next_actions=next_actions,
+        exit_code=EXIT_CODES.get(error_type, EXIT_CODES["xcode_ide_automation_failed"]),
+        error_type=error_type,
+    )
+
+
+def iter_ax_nodes(node: dict[str, Any]) -> Any:
+    yield node
+    for child in node.get("children", []):
+        if isinstance(child, dict):
+            yield from iter_ax_nodes(child)
+
+
+def find_ax_nodes(node: dict[str, Any], *, role: str | None = None, subrole: str | None = None) -> list[dict[str, Any]]:
+    matches: list[dict[str, Any]] = []
+    for item in iter_ax_nodes(node):
+        if role is not None and item.get("role") != role:
+            continue
+        if subrole is not None and item.get("subrole") != subrole:
+            continue
+        matches.append(item)
+    return matches
+
+
+def infer_selected_distribution_method(method_buttons: list[dict[str, Any]], description_text: str) -> str | None:
+    for item in method_buttons:
+        if item.get("selected") is True:
+            return str(item["method"])
+    lowered = description_text.lower()
+    for method, hints in METHOD_DESCRIPTION_HINTS.items():
+        if any(hint in lowered for hint in hints):
+            return method
+    for item in method_buttons:
+        method = str(item["method"])
+        if method.lower() in lowered:
+            return method
+    return None
+
+
+def parse_distribution_sheet(native_payload: dict[str, Any]) -> dict[str, Any] | None:
+    summary = native_payload.get("summary")
+    if not isinstance(summary, dict):
+        return None
+    windows = summary.get("windows")
+    if not isinstance(windows, list):
+        return None
+    for window in windows:
+        if not isinstance(window, dict):
+            continue
+        tree = window.get("tree")
+        if not isinstance(tree, dict):
+            continue
+        sheets = find_ax_nodes(tree, role="AXSheet")
+        for sheet in sheets:
+            step_title = ""
+            title_nodes = [
+                node for node in iter_ax_nodes(sheet)
+                if node.get("identifier") == "Distribution Step Title"
+                or node.get("description") == "Distribution Step Title"
+            ]
+            if title_nodes:
+                step_title = str(title_nodes[0].get("value") or "")
+
+            method_buttons: list[dict[str, Any]] = []
+            for node in find_ax_nodes(sheet, role="AXButton"):
+                description = str(node.get("description") or "").strip()
+                if description in DISTRIBUTION_METHODS:
+                    method_buttons.append(
+                        {
+                            "method": description,
+                            "enabled": bool(node.get("enabled", False)),
+                            "selected": bool(node.get("selected", False)),
+                        }
+                    )
+            if not method_buttons:
+                continue
+
+            navigation_buttons = []
+            for node in find_ax_nodes(sheet, role="AXButton"):
+                title = str(node.get("title") or "").strip()
+                if title:
+                    navigation_buttons.append(
+                        {
+                            "title": title,
+                            "enabled": bool(node.get("enabled", False)),
+                        }
+                    )
+
+            static_values = [
+                str(node.get("value") or "").strip()
+                for node in find_ax_nodes(sheet, role="AXStaticText")
+                if str(node.get("value") or "").strip()
+            ]
+            filtered_values = [value for value in static_values if value != step_title and value not in DISTRIBUTION_METHODS]
+            description_text = next((value for value in filtered_values if value.startswith("Use ")), "")
+            if not description_text and len(filtered_values) > 4:
+                description_text = filtered_values[-1]
+            identity_values = [value for value in filtered_values if value != description_text]
+            app_identity = {
+                "product_name": identity_values[0] if len(identity_values) > 0 else "",
+                "bundle_identifier": identity_values[1] if len(identity_values) > 1 else "",
+                "version": identity_values[2] if len(identity_values) > 2 else "",
+                "platform": identity_values[3] if len(identity_values) > 3 else "",
+            }
+            return {
+                "phase_id": "distribution_method_selection",
+                "step_title": step_title,
+                "methods": method_buttons,
+                "selected_method": infer_selected_distribution_method(method_buttons, description_text),
+                "navigation_buttons": navigation_buttons,
+                "description_text": description_text,
+                "app_identity": app_identity,
+                "window_title": str(window.get("title") or ""),
+            }
+    return None
+
+
+def validate_distribution_sheet(sheet: dict[str, Any] | None) -> str | None:
+    if sheet is None:
+        return "Xcode Organizer distribution sheet was not found"
+    if sheet.get("step_title") != EXPECTED_DISTRIBUTION_STEP_TITLE:
+        return "Organizer is on a different distribution phase than the method-selection sheet"
+    return None
+
+
+def distribution_navigation_button(sheet: dict[str, Any], title: str) -> dict[str, Any] | None:
+    for button in sheet.get("navigation_buttons", []):
+        if button.get("title") == title:
+            return button
+    return None
+
+
+def phase_id_from_title(step_title: str) -> str:
+    cleaned = "".join(ch.lower() if ch.isalnum() else "_" for ch in step_title.strip(":"))
+    return "_".join(part for part in cleaned.split("_") if part) or "unknown_distribution_phase"
+
+
+def infer_custom_route_from_title(title: str) -> str | None:
+    for route, prefix in CUSTOM_ROUTE_TITLE_PREFIXES.items():
+        if title.startswith(prefix):
+            return route
+    return None
+
+
+def phase_definition(step_title: str) -> dict[str, Any] | None:
+    return PHASE_CATALOG.get(step_title)
+
+
+def checkbox_value(node: dict[str, Any]) -> bool:
+    value = str(node.get("value") or "").strip().lower()
+    if value in {"1", "true", "yes"}:
+        return True
+    if value in {"0", "false", "no"}:
+        return False
+    return bool(node.get("selected", False))
+
+
+def ax_bool_from_value(value: str, fallback: bool) -> bool:
+    lowered = value.strip().lower()
+    if lowered in {"1", "true", "yes"}:
+        return True
+    if lowered in {"0", "false", "no"}:
+        return False
+    return fallback
+
+
+def normalize_option_control(
+    phase_kind: str,
+    route_context: dict[str, Any],
+    role: str,
+    title: str,
+    value: str,
+    *,
+    enabled: bool,
+    selected: bool,
+) -> dict[str, Any] | None:
+    if role == "AXRadioButton" and route_context.get("custom_route") == "App Store Connect":
+        for option_value, option_title in CUSTOM_DESTINATION_VALUES.items():
+            if title == option_title:
+                normalized_selected = ax_bool_from_value(value, selected)
+                return {
+                    "option_id": "custom_destination",
+                    "value": option_value,
+                    "display_title": title,
+                    "enabled": enabled,
+                    "selected": normalized_selected,
+                }
+    if role == "AXCheckBox":
+        for option_id, option_title in CHECKBOX_OPTION_TITLES.items():
+            if title == option_title:
+                return {
+                    "option_id": option_id,
+                    "value": checkbox_value({"value": value, "selected": selected}),
+                    "display_title": title,
+                    "enabled": enabled,
+                    "selected": selected,
+                }
+    return None
+
+
+def selected_options_from_controls(controls: list[dict[str, Any]]) -> dict[str, Any]:
+    selected: dict[str, Any] = {}
+    for control in controls:
+        option_id = control.get("option_id")
+        if not option_id:
+            continue
+        if control.get("role") == "AXRadioButton":
+            if control.get("selected") is True:
+                selected[str(option_id)] = control.get("value")
+        else:
+            selected[str(option_id)] = control.get("value")
+    return selected
+
+
+def parse_organizer_distribution_phase(native_payload: dict[str, Any]) -> dict[str, Any] | None:
+    method_sheet = parse_distribution_sheet(native_payload)
+    if method_sheet is not None:
+        return {
+            **method_sheet,
+            "phase_kind": PHASE_KIND_METHOD_SELECTION,
+            "recognized": True,
+            "route_context": {"top_level_method": method_sheet.get("selected_method"), "custom_route": None},
+            "selected_options": {},
+            "error_messages": [],
+            "warnings": [],
+            "guarded_final_actions": [],
+        }
+
+    summary = native_payload.get("summary")
+    if not isinstance(summary, dict):
+        return None
+    windows = summary.get("windows")
+    if not isinstance(windows, list):
+        return None
+
+    for window in windows:
+        if not isinstance(window, dict):
+            continue
+        tree = window.get("tree")
+        if not isinstance(tree, dict):
+            continue
+        for sheet in find_ax_nodes(tree, role="AXSheet"):
+            static_values = [
+                str(node.get("value") or "").strip()
+                for node in find_ax_nodes(sheet, role="AXStaticText")
+                if str(node.get("value") or "").strip()
+            ]
+            title_nodes = [
+                node for node in iter_ax_nodes(sheet)
+                if node.get("identifier") == "Distribution Step Title"
+                or node.get("description") == "Distribution Step Title"
+            ]
+            step_title = str(title_nodes[0].get("value") or "").strip() if title_nodes else ""
+            if not step_title:
+                step_title = next((value for value in static_values if value.endswith(":")), "")
+            if not step_title and not static_values:
+                continue
+
+            phase_info = phase_definition(step_title)
+            buttons: list[dict[str, Any]] = []
+            for node in find_ax_nodes(sheet, role="AXButton"):
+                title = str(node.get("title") or node.get("description") or "").strip()
+                if title:
+                    buttons.append(
+                        {
+                            "title": title,
+                            "enabled": bool(node.get("enabled", False)),
+                            "selected": bool(node.get("selected", False)),
+                        }
+                    )
+            controls: list[dict[str, Any]] = []
+            custom_routes: list[dict[str, Any]] = []
+            for node in iter_ax_nodes(sheet):
+                role = str(node.get("role") or "")
+                if role not in {"AXCheckBox", "AXPopUpButton", "AXTextField", "AXRadioButton"}:
+                    continue
+                title = str(node.get("title") or node.get("description") or "").strip()
+                value = str(node.get("value") or "").strip()
+                enabled = bool(node.get("enabled", False))
+                selected = bool(node.get("selected", False))
+                control: dict[str, Any] = {
+                    "role": role,
+                    "title": title,
+                    "value": value,
+                    "enabled": enabled,
+                    "selected": selected,
+                }
+                route_context = dict((phase_info or {}).get("route_context") or {})
+                normalized = normalize_option_control(
+                    (phase_info or {}).get("phase_kind") or PHASE_KIND_DOWNSTREAM,
+                    route_context,
+                    role,
+                    title,
+                    value,
+                    enabled=enabled,
+                    selected=selected,
+                )
+                if normalized is not None:
+                    control.update(normalized)
+                controls.append(control)
+                if role == "AXRadioButton":
+                    route = infer_custom_route_from_title(title)
+                    if route is not None:
+                        custom_routes.append(
+                            {
+                                "route": route,
+                                "title": title,
+                                "enabled": bool(node.get("enabled", False)),
+                                "selected": bool(node.get("selected", False)),
+                            }
+                        )
+
+            guarded_final_actions = [
+                button for button in buttons
+                if button.get("enabled") is True and str(button.get("title") or "") in FINAL_DISTRIBUTION_ACTION_TITLES
+            ]
+            safe_navigation = [
+                button for button in buttons
+                if str(button.get("title") or "") in SAFE_DISTRIBUTION_NAVIGATION_TITLES
+            ]
+            progress_text = [
+                value for value in static_values
+                if value and value != step_title and (
+                    value.endswith("...") or value.endswith("…") or value.lower().startswith(("preparing", "signing", "uploading", "exporting"))
+                )
+            ]
+            error_messages = static_values[1:] if step_title == "An error was encountered:" else []
+            selected_custom_route = next((item["route"] for item in custom_routes if item.get("selected") is True), None)
+            route_context = dict((phase_info or {}).get("route_context") or {})
+            if route_context.get("top_level_method") is None and selected_custom_route is not None:
+                route_context["top_level_method"] = "Custom"
+                route_context["custom_route"] = selected_custom_route
+            elif route_context.get("top_level_method") is None and step_title == "Review MazayaStg.ipa content:":
+                route_context["top_level_method"] = "Debugging"
+            elif route_context.get("top_level_method") is None and step_title == "An error was encountered:":
+                route_context["top_level_method"] = "Enterprise"
+            return {
+                "phase_id": (phase_info or {}).get("phase_id") or phase_id_from_title(step_title),
+                "phase_kind": (phase_info or {}).get("phase_kind") or (PHASE_KIND_CUSTOM_METHOD_SELECTION if custom_routes else PHASE_KIND_DOWNSTREAM),
+                "step_title": step_title,
+                "recognized": phase_info is not None,
+                "route_context": route_context,
+                "static_text": static_values,
+                "buttons": buttons,
+                "controls": controls,
+                "custom_routes": custom_routes,
+                "selected_custom_route": selected_custom_route,
+                "selected_options": selected_options_from_controls(controls),
+                "error_messages": error_messages,
+                "warnings": [] if phase_info is not None else [f"Unrecognized distribution phase: {step_title}"],
+                "safe_navigation": safe_navigation,
+                "guarded_final_actions": guarded_final_actions,
+                "progress_text": progress_text,
+                "window_title": str(window.get("title") or ""),
+            }
+    return None
+
+
+def inspect_distribution_phase(window_title_contains: str | None) -> tuple[dict[str, Any], dict[str, Any] | None]:
+    result = native_ax_inspect(window_title_contains=window_title_contains or "Organizer", max_depth=8)
+    native_payload = parse_native_json(result)
+    phase = parse_organizer_distribution_phase(native_payload) if isinstance(native_payload, dict) and native_payload.get("ok") is True else None
+    return result, phase
+
+
+def activate_xcode_for_probe() -> None:
+    run_command(
+        [
+            str(plugin_root() / "bin" / "xcode"),
+            "ide",
+            "activate",
+            "--json",
+        ],
+        timeout_seconds=10,
+    )
+
+
+def parse_option_overrides(raw: str | None) -> dict[str, Any]:
+    if raw is None or not raw.strip():
+        return {}
+    parsed = json.loads(raw)
+    if not isinstance(parsed, dict):
+        raise ValueError("option_overrides must be a JSON object")
+    return parsed
+
+
+def distribution_phase_has_enabled_button(phase: dict[str, Any] | None, titles: set[str]) -> bool:
+    if phase is None:
+        return False
+    for button in phase.get("buttons", []) + phase.get("navigation_buttons", []):
+        if button.get("enabled") is True and str(button.get("title") or "") in titles:
+            return True
+    return False
+
+
+def distribution_phase_button(phase: dict[str, Any], title: str) -> dict[str, Any] | None:
+    for button in phase.get("buttons", []) + phase.get("navigation_buttons", []):
+        if button.get("title") == title:
+            return button
+    return None
+
+
+def custom_route_control(phase: dict[str, Any] | None, route: str) -> dict[str, Any] | None:
+    if phase is None:
+        return None
+    for item in phase.get("custom_routes", []):
+        if item.get("route") == route:
+            return item
+    return None
+
+
+def phase_allows_auto_advance(phase: dict[str, Any] | None) -> bool:
+    if phase is None:
+        return False
+    return phase.get("phase_kind") in {
+        PHASE_KIND_DOWNSTREAM,
+        PHASE_KIND_CUSTOM_DESTINATION_SELECTION,
+        PHASE_KIND_CUSTOM_OPTIONS,
+        PHASE_KIND_REVIEW,
+    }
+
+
+def should_stop_probe(phase: dict[str, Any] | None) -> bool:
+    if phase is None:
+        return True
+    if phase.get("recognized") is not True:
+        return True
+    if phase.get("phase_kind") == PHASE_KIND_ERROR:
+        return True
+    if phase.get("guarded_final_actions"):
+        return True
+    return False
+
+
+def phase_snapshot(phase: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "phase_id": phase.get("phase_id"),
+        "phase_kind": phase.get("phase_kind"),
+        "step_title": phase.get("step_title"),
+        "recognized": phase.get("recognized"),
+        "route_context": phase.get("route_context"),
+        "selected_options": phase.get("selected_options"),
+        "guarded_final_actions": phase.get("guarded_final_actions"),
+    }
+
+
+def apply_option_overrides_to_phase(
+    phase: dict[str, Any],
+    option_overrides: dict[str, Any],
+    *,
+    window_title_contains: str | None,
+) -> tuple[dict[str, Any] | None, dict[str, Any] | None, list[str]]:
+    warnings: list[str] = []
+    if not option_overrides:
+        return phase, None, warnings
+
+    top_level_method = phase.get("route_context", {}).get("top_level_method")
+    custom_route = phase.get("route_context", {}).get("custom_route")
+
+    if phase.get("phase_kind") == PHASE_KIND_CUSTOM_DESTINATION_SELECTION and custom_route == "App Store Connect":
+        destination = option_overrides.get("custom_destination")
+        if destination is not None:
+            if destination not in CUSTOM_DESTINATION_VALUES:
+                warnings.append(f"Unsupported custom_destination override: {destination}")
+                return phase, None, warnings
+            if phase.get("selected_options", {}).get("custom_destination") == destination:
+                return phase, None, warnings
+            if phase.get("selected_options", {}).get("custom_destination") != destination:
+                title = CUSTOM_DESTINATION_VALUES[destination]
+                result = native_press_control(title=title, role="AXRadioButton", window_title_contains=window_title_contains or "Organizer")
+                native_payload = parse_native_json(result)
+                if result["exit_code"] != 0 or not isinstance(native_payload, dict) or native_payload.get("ok") is not True:
+                    return None, {
+                        "error_type": "xcode_ide_automation_failed",
+                        "summary": f"Failed to apply custom destination override: {destination}",
+                        "native": native_payload,
+                    }, warnings
+                time.sleep(0.2)
+                _, refreshed = inspect_distribution_phase(window_title_contains)
+                return refreshed, None, warnings
+        return phase, None, warnings
+
+    if phase.get("phase_kind") == PHASE_KIND_CUSTOM_OPTIONS and custom_route in {"Release Testing", "Enterprise", "Debugging"}:
+        current_phase = phase
+        for option_id in ("strip_swift_symbols", "include_manifest"):
+            if option_id not in option_overrides:
+                continue
+            desired = bool(option_overrides[option_id])
+            current = current_phase.get("selected_options", {}).get(option_id)
+            if current == desired:
+                continue
+            title = CHECKBOX_OPTION_TITLES[option_id]
+            result = native_press_control(title=title, role="AXCheckBox", window_title_contains=window_title_contains or "Organizer")
+            native_payload = parse_native_json(result)
+            if result["exit_code"] != 0 or not isinstance(native_payload, dict) or native_payload.get("ok") is not True:
+                return None, {
+                    "error_type": "xcode_ide_automation_failed",
+                    "summary": f"Failed to apply option override: {option_id}",
+                    "native": native_payload,
+                }, warnings
+            time.sleep(0.2)
+            _, refreshed = inspect_distribution_phase(window_title_contains)
+            if refreshed is None:
+                return None, {
+                    "error_type": "xcode_ide_automation_failed",
+                    "summary": f"Failed to re-inspect phase after applying option override: {option_id}",
+                    "native": native_payload,
+                }, warnings
+            current_phase = refreshed
+        unsupported = sorted(set(option_overrides) - {"strip_swift_symbols", "include_manifest"})
+        if unsupported and top_level_method == "Custom":
+            warnings.extend([f"Unsupported option override ignored: {key}" for key in unsupported])
+        return current_phase, None, warnings
+
+    known_override_keys = {"custom_destination", "strip_swift_symbols", "include_manifest"}
+    unsupported = sorted(set(option_overrides) - known_override_keys)
+    warnings.extend([f"Option override ignored on phase {phase.get('phase_id')}: {key}" for key in unsupported])
+    return phase, None, warnings
+
+
+def safe_probe_loop(
+    *,
+    current_phase: dict[str, Any] | None,
+    window_title_contains: str | None,
+    cancel_after_inspect: bool,
+    wait_ready_seconds: int,
+    max_safe_steps: int,
+    option_overrides: dict[str, Any],
+    base_warnings: list[str],
+    phase_before: dict[str, Any],
+) -> tuple[dict[str, Any] | None, dict[str, Any] | None, list[dict[str, Any]], list[str], dict[str, Any] | None, bool | None]:
+    phase_after = current_phase
+    post_payload: dict[str, Any] | None = None
+    visited_phases: list[dict[str, Any]] = []
+    warnings = list(base_warnings)
+    override_native: dict[str, Any] | None = None
+    cancel_payload: dict[str, Any] | None = None
+    cancel_ok: bool | None = None
+
+    steps_taken = 0
+    while phase_after is not None:
+        visited_phases.append(phase_snapshot(phase_after))
+        if should_stop_probe(phase_after):
+            if phase_after.get("guarded_final_actions"):
+                warnings.append("Final distribution action is visible after probing; it was not pressed.")
+            break
+        if not phase_allows_auto_advance(phase_after):
+            break
+
+        phase_after, override_error, override_warnings = apply_option_overrides_to_phase(
+            phase_after,
+            option_overrides,
+            window_title_contains=window_title_contains,
+        )
+        warnings.extend(override_warnings)
+        if override_error is not None:
+            post_payload = override_error
+            phase_after = None
+            break
+        if phase_after is None:
+            break
+
+        wait_deadline = time.monotonic() + max(0, wait_ready_seconds)
+        while (
+            wait_ready_seconds > 0
+            and phase_after is not None
+            and phase_allows_auto_advance(phase_after)
+            and not distribution_phase_has_enabled_button(phase_after, SAFE_PROBE_READY_TITLES)
+            and not should_stop_probe(phase_after)
+            and time.monotonic() < wait_deadline
+        ):
+            time.sleep(1)
+            post_result, phase_after = inspect_distribution_phase(window_title_contains)
+            post_payload = parse_native_json(post_result)
+            if phase_after is not None:
+                visited_phases.append(phase_snapshot(phase_after))
+            if phase_after is None:
+                break
+
+        next_button = distribution_phase_button(phase_after, "Next")
+        if next_button is None or not bool(next_button.get("enabled", False)):
+            break
+        if steps_taken >= max_safe_steps:
+            warnings.append(f"Safe probe step budget reached at phase {phase_after.get('phase_id')}.")
+            break
+        result = native_press_button(title="Next", window_title_contains=window_title_contains or "Organizer")
+        override_native = parse_native_json(result)
+        if result["exit_code"] != 0 or not isinstance(override_native, dict) or override_native.get("ok") is not True:
+            post_payload = override_native
+            phase_after = None
+            break
+        steps_taken += 1
+        time.sleep(1)
+        activate_xcode_for_probe()
+        post_result, phase_after = inspect_distribution_phase(window_title_contains)
+        post_payload = parse_native_json(post_result)
+        retry_deadline = time.monotonic() + max(1, wait_ready_seconds)
+        while phase_after is None and time.monotonic() < retry_deadline:
+            time.sleep(1)
+            activate_xcode_for_probe()
+            post_result, phase_after = inspect_distribution_phase(window_title_contains)
+            post_payload = parse_native_json(post_result)
+        if phase_after is None:
+            break
+
+    if cancel_after_inspect:
+        cancel_result = native_press_button(title="Cancel", window_title_contains=window_title_contains or "Organizer")
+        cancel_payload = parse_native_json(cancel_result)
+        cancel_ok = bool(cancel_result["exit_code"] == 0 and isinstance(cancel_payload, dict) and cancel_payload.get("ok") is True)
+        if not cancel_ok:
+            warnings.append("Automatic cancel after probe did not verify; inspect the Organizer before continuing.")
+
+    return phase_after, post_payload, visited_phases, warnings, cancel_payload, cancel_ok
+
+
+def organizer_open_command() -> int:
+    preflight_exit, preflight_warnings, preflight_details = native_preflight(require=True, include_ax=True)
+    if preflight_exit is not None:
+        return preflight_exit
+    result = native_press_menu_path(["Window", "Organizer"])
+    return finish_native_result(
+        result,
+        success_summary="Xcode Organizer opened through the GUI",
+        failure_summary="Xcode Organizer could not be opened through the GUI",
+        extra_data={"native_preflight": preflight_details, "warnings": preflight_warnings, "route": "Window > Organizer"},
+        next_actions=["Use organizer-inspect to inspect the Organizer UI before pressing distribution controls."],
+    )
+
+
+def organizer_inspect_command(window_title_contains: str | None, max_depth: int) -> int:
+    preflight_exit, preflight_warnings, preflight_details = native_preflight(require=True, include_ax=True)
+    if preflight_exit is not None:
+        return preflight_exit
+    result = native_ax_inspect(window_title_contains=window_title_contains or "Organizer", max_depth=max_depth)
+    return finish_native_result(
+        result,
+        success_summary="Xcode Organizer inspected through the GUI",
+        failure_summary="Xcode Organizer inspection failed",
+        extra_data={"native_preflight": preflight_details, "warnings": preflight_warnings},
+        next_actions=["Use organizer-press with a visible enabled button title such as Distribute App."],
+    )
+
+
+def organizer_press_command(button_title: str, window_title_contains: str | None) -> int:
+    preflight_exit, preflight_warnings, preflight_details = native_preflight(require=True, include_ax=True)
+    if preflight_exit is not None:
+        return preflight_exit
+    result = native_press_button(title=button_title, window_title_contains=window_title_contains or "Organizer")
+    return finish_native_result(
+        result,
+        success_summary="Xcode Organizer button pressed through the GUI",
+        failure_summary="Xcode Organizer button press failed",
+        extra_data={"native_preflight": preflight_details, "warnings": preflight_warnings, "button_title": button_title},
+        next_actions=["Use organizer-inspect or xcode_native_windows to inspect the next Organizer distribution step."],
+    )
+
+
+def organizer_distribution_inspect_command(window_title_contains: str | None) -> int:
+    preflight_exit, preflight_warnings, preflight_details = native_preflight(require=True, include_ax=True)
+    if preflight_exit is not None:
+        return preflight_exit
+    result = native_ax_inspect(window_title_contains=window_title_contains or "Organizer", max_depth=7)
+    native_payload = parse_native_json(result)
+    if result["exit_code"] != 0 or not isinstance(native_payload, dict) or native_payload.get("ok") is not True:
+        return finish_native_result(
+            result,
+            success_summary="Xcode Organizer distribution sheet inspected",
+            failure_summary="Xcode Organizer distribution sheet inspection failed",
+            extra_data={"native_preflight": preflight_details, "warnings": preflight_warnings},
+            next_actions=["Use organizer-open or organizer-inspect to verify the current Organizer state."],
+        )
+    sheet = parse_distribution_sheet(native_payload)
+    if sheet is None:
+        return payload(
+            "failure",
+            "Xcode Organizer distribution sheet was not found",
+            data={"native_preflight": preflight_details, "warnings": preflight_warnings, "native": native_payload},
+            next_actions=[
+                "Open Organizer and press Distribute App before inspecting the distribution-method sheet.",
+                "Use organizer-inspect to review the raw Organizer AX tree if the modal shape changed.",
+            ],
+            exit_code=EXIT_CODES["xcode_menu_item_not_found"],
+            error_type="xcode_menu_item_not_found",
+        )
+    return payload(
+        "success",
+        "Xcode Organizer distribution sheet inspected",
+        data={"native_preflight": preflight_details, "warnings": preflight_warnings, "distribution_sheet": sheet, "native": native_payload},
+        next_actions=[
+            "Use organizer-distribution-select --method <method> to choose a distribution route.",
+            "Use organizer-press --button-title Distribute when the selected method is correct.",
+        ],
+    )
+
+
+def organizer_distribution_select_command(method: str, window_title_contains: str | None) -> int:
+    preflight_exit, preflight_warnings, preflight_details = native_preflight(require=True, include_ax=True)
+    if preflight_exit is not None:
+        return preflight_exit
+    inspect_result = native_ax_inspect(window_title_contains=window_title_contains or "Organizer", max_depth=7)
+    inspect_payload = parse_native_json(inspect_result)
+    sheet_before = parse_distribution_sheet(inspect_payload) if isinstance(inspect_payload, dict) and inspect_payload.get("ok") is True else None
+    validation_error = validate_distribution_sheet(sheet_before)
+    if validation_error is not None:
+        return payload(
+            "failure",
+            validation_error,
+            data={"native_preflight": preflight_details, "warnings": preflight_warnings, "distribution_sheet": sheet_before, "native": inspect_payload},
+            next_actions=[
+                "Use organizer-distribution-inspect to confirm the current Organizer phase before selecting a method.",
+                "If Xcode moved to another sheet, do not continue with a stale distribution method command.",
+            ],
+            exit_code=EXIT_CODES["xcode_menu_item_not_found"],
+            error_type="xcode_menu_item_not_found",
+        )
+    method_map = {str(item["method"]): item for item in sheet_before.get("methods", [])}
+    if method not in method_map:
+        return payload(
+            "failure",
+            "Requested distribution method is not available on the current Organizer sheet",
+            data={"native_preflight": preflight_details, "warnings": preflight_warnings, "distribution_sheet": sheet_before, "requested_method": method},
+            next_actions=["Use organizer-distribution-inspect to choose one of the currently available methods."],
+            exit_code=EXIT_CODES["xcode_menu_item_not_found"],
+            error_type="xcode_menu_item_not_found",
+        )
+    if not bool(method_map[method].get("enabled", False)):
+        return payload(
+            "failure",
+            "Requested distribution method is disabled on the current Organizer sheet",
+            data={"native_preflight": preflight_details, "warnings": preflight_warnings, "distribution_sheet": sheet_before, "requested_method": method},
+            next_actions=["Choose an enabled distribution method before continuing."],
+            exit_code=EXIT_CODES["xcode_menu_item_disabled"],
+            error_type="xcode_menu_item_disabled",
+        )
+    if sheet_before.get("selected_method") == method:
+        return payload(
+            "success",
+            "Xcode Organizer distribution method already selected",
+            data={"native_preflight": preflight_details, "warnings": preflight_warnings, "distribution_sheet": sheet_before, "requested_method": method},
+            next_actions=["Use organizer-distribution-confirm to advance this selected route."],
+        )
+    result = native_press_button(title=method, window_title_contains=window_title_contains or "Organizer")
+    native_payload = parse_native_json(result)
+    if result["exit_code"] != 0 or not isinstance(native_payload, dict) or native_payload.get("ok") is not True:
+        return finish_native_result(
+            result,
+            success_summary="Xcode Organizer distribution method selected",
+            failure_summary="Xcode Organizer distribution method selection failed",
+            extra_data={"native_preflight": preflight_details, "warnings": preflight_warnings, "requested_method": method},
+            next_actions=["Use organizer-distribution-inspect to confirm the available methods on the current sheet."],
+        )
+    post_result = native_ax_inspect(window_title_contains=window_title_contains or "Organizer", max_depth=7)
+    post_payload = parse_native_json(post_result)
+    distribution_sheet = parse_distribution_sheet(post_payload) if isinstance(post_payload, dict) and post_payload.get("ok") is True else None
+    if distribution_sheet is not None and distribution_sheet.get("selected_method") not in {None, method}:
+        return payload(
+            "failure",
+            "Xcode Organizer method selection did not verify the requested route",
+            data={
+                "native_preflight": preflight_details,
+                "warnings": preflight_warnings,
+                "requested_method": method,
+                "distribution_sheet_before": sheet_before,
+                "distribution_sheet": distribution_sheet,
+                "native": native_payload,
+                "post_inspect": post_payload,
+            },
+            next_actions=["Use organizer-distribution-inspect to verify which method Xcode currently considers selected."],
+            exit_code=EXIT_CODES["xcode_ide_automation_failed"],
+            error_type="xcode_ide_automation_failed",
+        )
+    return payload(
+        "success",
+        "Xcode Organizer distribution method selected",
+        data={
+            "native_preflight": preflight_details,
+            "warnings": preflight_warnings,
+            "requested_method": method,
+            "distribution_sheet_before": sheet_before,
+            "native": native_payload,
+            "distribution_sheet": distribution_sheet,
+            "post_inspect": post_payload,
+        },
+        next_actions=[
+            "Verify distribution_sheet.selected_method before continuing.",
+            "Use organizer-distribution-confirm to advance this selected route carefully.",
+        ],
+    )
+
+
+def organizer_distribution_confirm_command(expected_method: str | None, window_title_contains: str | None) -> int:
+    preflight_exit, preflight_warnings, preflight_details = native_preflight(require=True, include_ax=True)
+    if preflight_exit is not None:
+        return preflight_exit
+    inspect_result = native_ax_inspect(window_title_contains=window_title_contains or "Organizer", max_depth=7)
+    inspect_payload = parse_native_json(inspect_result)
+    sheet_before = parse_distribution_sheet(inspect_payload) if isinstance(inspect_payload, dict) and inspect_payload.get("ok") is True else None
+    validation_error = validate_distribution_sheet(sheet_before)
+    if validation_error is not None:
+        return payload(
+            "failure",
+            validation_error,
+            data={"native_preflight": preflight_details, "warnings": preflight_warnings, "distribution_sheet": sheet_before, "native": inspect_payload},
+            next_actions=["Use organizer-distribution-inspect to confirm the current Organizer phase before pressing Distribute."],
+            exit_code=EXIT_CODES["xcode_menu_item_not_found"],
+            error_type="xcode_menu_item_not_found",
+        )
+    if expected_method and sheet_before.get("selected_method") != expected_method:
+        return payload(
+            "failure",
+            "Selected distribution method does not match the expected method",
+            data={"native_preflight": preflight_details, "warnings": preflight_warnings, "distribution_sheet": sheet_before, "expected_method": expected_method},
+            next_actions=["Use organizer-distribution-select to choose the intended method before confirming."],
+            exit_code=EXIT_CODES["xcode_menu_item_disabled"],
+            error_type="xcode_menu_item_disabled",
+        )
+    selected_method = str(sheet_before.get("selected_method") or "")
+    confirm_title = METHOD_CONFIRM_BUTTONS.get(selected_method)
+    if not confirm_title:
+        return payload(
+            "failure",
+            "Selected distribution method does not have a known confirm action",
+            data={"native_preflight": preflight_details, "warnings": preflight_warnings, "distribution_sheet": sheet_before, "selected_method": selected_method},
+            next_actions=["Use organizer-distribution-inspect to verify the selected method before continuing."],
+            exit_code=EXIT_CODES["xcode_menu_item_disabled"],
+            error_type="xcode_menu_item_disabled",
+        )
+    confirm_button = distribution_navigation_button(sheet_before, confirm_title)
+    if confirm_button is None or not bool(confirm_button.get("enabled", False)):
+        return payload(
+            "failure",
+            f"{confirm_title} is not enabled on the current Organizer distribution sheet",
+            data={"native_preflight": preflight_details, "warnings": preflight_warnings, "distribution_sheet": sheet_before, "selected_method": selected_method},
+            next_actions=["Resolve the current distribution sheet state before continuing."],
+            exit_code=EXIT_CODES["xcode_menu_item_disabled"],
+            error_type="xcode_menu_item_disabled",
+        )
+    result = native_press_button(title=confirm_title, window_title_contains=window_title_contains or "Organizer")
+    native_payload = parse_native_json(result)
+    if result["exit_code"] != 0 or not isinstance(native_payload, dict) or native_payload.get("ok") is not True:
+        return finish_native_result(
+            result,
+            success_summary="Xcode Organizer distribution phase confirmed",
+            failure_summary="Xcode Organizer distribution confirmation failed",
+            extra_data={"native_preflight": preflight_details, "warnings": preflight_warnings, "distribution_sheet_before": sheet_before, "expected_method": expected_method},
+            next_actions=["Use organizer-distribution-inspect to re-check the current sheet before retrying."],
+        )
+    time.sleep(0.3)
+    post_result = native_ax_inspect(window_title_contains=window_title_contains or "Organizer", max_depth=7)
+    post_payload = parse_native_json(post_result)
+    sheet_after = parse_distribution_sheet(post_payload) if isinstance(post_payload, dict) and post_payload.get("ok") is True else None
+    if sheet_after is not None and sheet_after.get("step_title") == EXPECTED_DISTRIBUTION_STEP_TITLE:
+        return payload(
+            "failure",
+            "Organizer did not advance past the distribution-method selection sheet",
+            data={
+                "native_preflight": preflight_details,
+                "warnings": preflight_warnings,
+                "distribution_sheet_before": sheet_before,
+                "distribution_sheet": sheet_after,
+                "expected_method": expected_method,
+                "native": native_payload,
+                "post_inspect": post_payload,
+            },
+            next_actions=["Inspect the current Organizer sheet before retrying Distribute."],
+            exit_code=EXIT_CODES["xcode_ide_automation_failed"],
+            error_type="xcode_ide_automation_failed",
+        )
+    return payload(
+        "success",
+        "Xcode Organizer distribution phase confirmed",
+        data={
+            "native_preflight": preflight_details,
+            "warnings": preflight_warnings,
+            "distribution_sheet_before": sheet_before,
+            "expected_method": expected_method,
+            "confirm_title": confirm_title,
+            "native": native_payload,
+            "post_inspect": post_payload,
+        },
+        next_actions=["Inspect the next Organizer phase before entering credentials or upload options."],
+    )
+
+
+def organizer_distribution_step_inspect_command(window_title_contains: str | None) -> int:
+    preflight_exit, preflight_warnings, preflight_details = native_preflight(require=True, include_ax=True)
+    if preflight_exit is not None:
+        return preflight_exit
+    inspect_result, phase = inspect_distribution_phase(window_title_contains)
+    native_payload = parse_native_json(inspect_result)
+    if inspect_result["exit_code"] != 0 or not isinstance(native_payload, dict) or native_payload.get("ok") is not True:
+        return finish_native_result(
+            inspect_result,
+            success_summary="Xcode Organizer distribution phase inspected",
+            failure_summary="Xcode Organizer distribution phase inspection failed",
+            extra_data={"native_preflight": preflight_details, "warnings": preflight_warnings},
+            next_actions=["Use organizer-inspect to review the raw Organizer AX tree."],
+        )
+    if phase is None:
+        return payload(
+            "failure",
+            "Xcode Organizer distribution phase was not found",
+            data={"native_preflight": preflight_details, "warnings": preflight_warnings, "native": native_payload},
+            next_actions=["Open the Organizer distribution wizard before inspecting a distribution phase."],
+            exit_code=EXIT_CODES["xcode_menu_item_not_found"],
+            error_type="xcode_menu_item_not_found",
+        )
+    warnings = list(preflight_warnings)
+    if phase.get("guarded_final_actions"):
+        warnings.append("Final distribution action is visible; this command inspected only and did not press it.")
+    return payload(
+        "success",
+        "Xcode Organizer distribution phase inspected",
+        data={"native_preflight": preflight_details, "warnings": warnings, "distribution_phase": phase, "native": native_payload},
+        warnings=warnings,
+        next_actions=[
+            "Use organizer-distribution-probe-method to safely inspect a route and cancel out.",
+            "Do not press Upload, Export, or final Distribute unless upload/export is explicitly intended.",
+        ],
+    )
+
+
+def organizer_distribution_probe_method_command(
+    method: str,
+    window_title_contains: str | None,
+    *,
+    cancel_after_inspect: bool,
+    settle_seconds: int,
+    wait_ready_seconds: int,
+    max_safe_steps: int,
+    option_overrides: dict[str, Any],
+) -> int:
+    preflight_exit, preflight_warnings, preflight_details = native_preflight(require=True, include_ax=True)
+    if preflight_exit is not None:
+        return preflight_exit
+
+    inspect_result, phase_before = inspect_distribution_phase(window_title_contains)
+    inspect_payload = parse_native_json(inspect_result)
+    method_sheet = parse_distribution_sheet(inspect_payload) if isinstance(inspect_payload, dict) and inspect_payload.get("ok") is True else None
+    validation_error = validate_distribution_sheet(method_sheet)
+    if validation_error is not None:
+        return payload(
+            "failure",
+            validation_error,
+            data={"native_preflight": preflight_details, "warnings": preflight_warnings, "distribution_phase": phase_before, "native": inspect_payload},
+            next_actions=["Open the distribution-method sheet before probing a method route."],
+            exit_code=EXIT_CODES["xcode_menu_item_not_found"],
+            error_type="xcode_menu_item_not_found",
+        )
+
+    method_map = {str(item["method"]): item for item in method_sheet.get("methods", [])}
+    if method not in method_map:
+        return payload(
+            "failure",
+            "Requested distribution method is not available on the current Organizer sheet",
+            data={"native_preflight": preflight_details, "warnings": preflight_warnings, "distribution_sheet": method_sheet, "requested_method": method},
+            next_actions=["Use organizer-distribution-inspect to choose one of the currently available methods."],
+            exit_code=EXIT_CODES["xcode_menu_item_not_found"],
+            error_type="xcode_menu_item_not_found",
+        )
+    if not bool(method_map[method].get("enabled", False)):
+        return payload(
+            "failure",
+            "Requested distribution method is disabled on the current Organizer sheet",
+            data={"native_preflight": preflight_details, "warnings": preflight_warnings, "distribution_sheet": method_sheet, "requested_method": method},
+            next_actions=["Choose an enabled distribution method before probing."],
+            exit_code=EXIT_CODES["xcode_menu_item_disabled"],
+            error_type="xcode_menu_item_disabled",
+        )
+
+    select_payload: dict[str, Any] | None = None
+    if method_sheet.get("selected_method") != method:
+        select_result = native_press_button(title=method, window_title_contains=window_title_contains or "Organizer")
+        select_payload = parse_native_json(select_result)
+        if select_result["exit_code"] != 0 or not isinstance(select_payload, dict) or select_payload.get("ok") is not True:
+            return finish_native_result(
+                select_result,
+                success_summary="Xcode Organizer distribution method selected for probing",
+                failure_summary="Xcode Organizer distribution method selection failed",
+                extra_data={"native_preflight": preflight_details, "warnings": preflight_warnings, "requested_method": method},
+                next_actions=["Use organizer-distribution-inspect to confirm the method-selection sheet state."],
+            )
+        time.sleep(0.2)
+        verify_result, _ = inspect_distribution_phase(window_title_contains)
+        verify_payload = parse_native_json(verify_result)
+        method_sheet = parse_distribution_sheet(verify_payload) if isinstance(verify_payload, dict) and verify_payload.get("ok") is True else None
+        if method_sheet is None or method_sheet.get("selected_method") != method:
+            return payload(
+                "failure",
+                "Xcode Organizer method selection did not verify before probing",
+                data={
+                    "native_preflight": preflight_details,
+                    "warnings": preflight_warnings,
+                    "requested_method": method,
+                    "distribution_sheet": method_sheet,
+                    "select_native": select_payload,
+                    "verify_native": verify_payload,
+                },
+                next_actions=["Use organizer-distribution-inspect to verify which method Xcode currently considers selected."],
+                exit_code=EXIT_CODES["xcode_ide_automation_failed"],
+                error_type="xcode_ide_automation_failed",
+            )
+
+    confirm_title = METHOD_CONFIRM_BUTTONS[method]
+    confirm_button = distribution_navigation_button(method_sheet, confirm_title)
+    if confirm_button is None or not bool(confirm_button.get("enabled", False)):
+        return payload(
+            "failure",
+            f"{confirm_title} is not enabled for the selected Organizer distribution method",
+            data={"native_preflight": preflight_details, "warnings": preflight_warnings, "distribution_sheet": method_sheet, "requested_method": method},
+            next_actions=["Resolve the current distribution sheet state before probing this route."],
+            exit_code=EXIT_CODES["xcode_menu_item_disabled"],
+            error_type="xcode_menu_item_disabled",
+        )
+
+    advance_result = native_press_button(title=confirm_title, window_title_contains=window_title_contains or "Organizer")
+    advance_payload = parse_native_json(advance_result)
+    if advance_result["exit_code"] != 0 or not isinstance(advance_payload, dict) or advance_payload.get("ok") is not True:
+        return finish_native_result(
+            advance_result,
+            success_summary="Xcode Organizer distribution method probe advanced",
+            failure_summary="Xcode Organizer distribution method probe failed to advance",
+            extra_data={"native_preflight": preflight_details, "warnings": preflight_warnings, "requested_method": method, "confirm_title": confirm_title},
+            next_actions=["Use organizer-distribution-inspect to re-check the current sheet before retrying."],
+        )
+
+    time.sleep(max(0, settle_seconds))
+    _, phase_after = inspect_distribution_phase(window_title_contains)
+    phase_after, post_payload, visited_phases, warnings, cancel_payload, cancel_ok = safe_probe_loop(
+        current_phase=phase_after,
+        window_title_contains=window_title_contains,
+        cancel_after_inspect=cancel_after_inspect,
+        wait_ready_seconds=wait_ready_seconds,
+        max_safe_steps=max_safe_steps,
+        option_overrides=option_overrides,
+        base_warnings=preflight_warnings,
+        phase_before=method_sheet,
+    )
+
+    if phase_after is None:
+        return payload(
+            "failure",
+            "Xcode Organizer distribution method probe could not inspect the next phase",
+            data={
+                "native_preflight": preflight_details,
+                "warnings": warnings,
+                "requested_method": method,
+                "confirm_title": confirm_title,
+                "distribution_sheet_before": method_sheet,
+                "select_native": select_payload,
+                "advance_native": advance_payload,
+                "post_inspect": post_payload,
+                "visited_phases": visited_phases,
+                "option_overrides": option_overrides,
+                "max_safe_steps": max_safe_steps,
+                "cancel_after_inspect": cancel_after_inspect,
+                "wait_ready_seconds": wait_ready_seconds,
+                "cancel_ok": cancel_ok,
+                "cancel_native": cancel_payload,
+            },
+            warnings=warnings,
+            next_actions=["Use organizer-inspect to inspect the visible Organizer state before continuing."],
+            exit_code=EXIT_CODES["xcode_ide_automation_failed"],
+            error_type="xcode_ide_automation_failed",
+        )
+
+    return payload(
+        "success",
+        "Xcode Organizer distribution method probed without pressing final upload/export actions",
+        data={
+            "native_preflight": preflight_details,
+            "warnings": warnings,
+            "requested_method": method,
+            "confirm_title": confirm_title,
+            "distribution_sheet_before": method_sheet,
+            "select_native": select_payload,
+            "advance_native": advance_payload,
+            "distribution_phase": phase_after,
+            "post_inspect": post_payload,
+            "visited_phases": visited_phases,
+            "option_overrides": option_overrides,
+            "max_safe_steps": max_safe_steps,
+            "cancel_after_inspect": cancel_after_inspect,
+            "wait_ready_seconds": wait_ready_seconds,
+            "cancel_ok": cancel_ok,
+            "cancel_native": cancel_payload,
+        },
+        warnings=warnings,
+        next_actions=[
+            "Review distribution_phase for the next screen fields and guarded final actions.",
+            "Reopen the distribution-method sheet before probing another route.",
+        ],
+    )
+
+
+def organizer_distribution_custom_select_command(route: str, window_title_contains: str | None) -> int:
+    preflight_exit, preflight_warnings, preflight_details = native_preflight(require=True, include_ax=True)
+    if preflight_exit is not None:
+        return preflight_exit
+
+    inspect_result, phase_before = inspect_distribution_phase(window_title_contains)
+    inspect_payload = parse_native_json(inspect_result)
+    if phase_before is None or phase_before.get("phase_kind") != "custom_method_selection":
+        return payload(
+            "failure",
+            "Xcode Organizer custom distribution route sheet was not found",
+            data={"native_preflight": preflight_details, "warnings": preflight_warnings, "distribution_phase": phase_before, "native": inspect_payload},
+            next_actions=["Select Custom on the distribution-method sheet and press Next before selecting a custom route."],
+            exit_code=EXIT_CODES["xcode_menu_item_not_found"],
+            error_type="xcode_menu_item_not_found",
+        )
+    route_item = custom_route_control(phase_before, route)
+    if route_item is None:
+        return payload(
+            "failure",
+            "Requested custom distribution route is not available on the current Organizer sheet",
+            data={"native_preflight": preflight_details, "warnings": preflight_warnings, "distribution_phase": phase_before, "requested_route": route},
+            next_actions=["Use organizer-distribution-step-inspect to choose one of the available custom routes."],
+            exit_code=EXIT_CODES["xcode_menu_item_not_found"],
+            error_type="xcode_menu_item_not_found",
+        )
+    if not bool(route_item.get("enabled", False)):
+        return payload(
+            "failure",
+            "Requested custom distribution route is disabled on the current Organizer sheet",
+            data={"native_preflight": preflight_details, "warnings": preflight_warnings, "distribution_phase": phase_before, "requested_route": route},
+            next_actions=["Choose an enabled custom distribution route before continuing."],
+            exit_code=EXIT_CODES["xcode_menu_item_disabled"],
+            error_type="xcode_menu_item_disabled",
+        )
+    if phase_before.get("selected_custom_route") == route:
+        return payload(
+            "success",
+            "Xcode Organizer custom distribution route already selected",
+            data={"native_preflight": preflight_details, "warnings": preflight_warnings, "distribution_phase": phase_before, "requested_route": route},
+            next_actions=["Use organizer-distribution-probe-custom-route to safely inspect this custom route's next screen."],
+        )
+
+    result = native_press_control(title=str(route_item["title"]), role="AXRadioButton", window_title_contains=window_title_contains or "Organizer")
+    native_payload = parse_native_json(result)
+    if result["exit_code"] != 0 or not isinstance(native_payload, dict) or native_payload.get("ok") is not True:
+        return finish_native_result(
+            result,
+            success_summary="Xcode Organizer custom distribution route selected",
+            failure_summary="Xcode Organizer custom distribution route selection failed",
+            extra_data={"native_preflight": preflight_details, "warnings": preflight_warnings, "requested_route": route, "distribution_phase_before": phase_before},
+            next_actions=["Use organizer-distribution-step-inspect to confirm the custom route sheet state."],
+        )
+    time.sleep(0.2)
+    post_result, phase_after = inspect_distribution_phase(window_title_contains)
+    post_payload = parse_native_json(post_result)
+    if phase_after is None or phase_after.get("selected_custom_route") != route:
+        return payload(
+            "failure",
+            "Xcode Organizer custom route selection did not verify the requested route",
+            data={
+                "native_preflight": preflight_details,
+                "warnings": preflight_warnings,
+                "requested_route": route,
+                "distribution_phase_before": phase_before,
+                "distribution_phase": phase_after,
+                "native": native_payload,
+                "post_inspect": post_payload,
+            },
+            next_actions=["Use organizer-distribution-step-inspect to verify which custom route Xcode currently considers selected."],
+            exit_code=EXIT_CODES["xcode_ide_automation_failed"],
+            error_type="xcode_ide_automation_failed",
+        )
+    return payload(
+        "success",
+        "Xcode Organizer custom distribution route selected",
+        data={
+            "native_preflight": preflight_details,
+            "warnings": preflight_warnings,
+            "requested_route": route,
+            "distribution_phase_before": phase_before,
+            "distribution_phase": phase_after,
+            "native": native_payload,
+            "post_inspect": post_payload,
+        },
+        next_actions=["Use organizer-distribution-probe-custom-route to safely inspect this custom route's next screen."],
+    )
+
+
+def organizer_distribution_probe_custom_route_command(
+    route: str,
+    window_title_contains: str | None,
+    *,
+    cancel_after_inspect: bool,
+    settle_seconds: int,
+    wait_ready_seconds: int,
+    max_safe_steps: int,
+    option_overrides: dict[str, Any],
+) -> int:
+    preflight_exit, preflight_warnings, preflight_details = native_preflight(require=True, include_ax=True)
+    if preflight_exit is not None:
+        return preflight_exit
+
+    inspect_result, phase = inspect_distribution_phase(window_title_contains)
+    inspect_payload = parse_native_json(inspect_result)
+    method_sheet = parse_distribution_sheet(inspect_payload) if isinstance(inspect_payload, dict) and inspect_payload.get("ok") is True else None
+    validation_error = validate_distribution_sheet(method_sheet)
+    if validation_error is None:
+        if method_sheet.get("selected_method") != "Custom":
+            result = native_press_button(title="Custom", window_title_contains=window_title_contains or "Organizer")
+            native_payload = parse_native_json(result)
+            if result["exit_code"] != 0 or not isinstance(native_payload, dict) or native_payload.get("ok") is not True:
+                return finish_native_result(
+                    result,
+                    success_summary="Xcode Organizer Custom method selected for probing",
+                    failure_summary="Xcode Organizer Custom method selection failed",
+                    extra_data={"native_preflight": preflight_details, "warnings": preflight_warnings, "requested_custom_route": route},
+                    next_actions=["Use organizer-distribution-inspect to confirm the method-selection sheet state."],
+                )
+            time.sleep(0.2)
+            inspect_result, phase = inspect_distribution_phase(window_title_contains)
+            inspect_payload = parse_native_json(inspect_result)
+            method_sheet = parse_distribution_sheet(inspect_payload) if isinstance(inspect_payload, dict) and inspect_payload.get("ok") is True else None
+        next_button = distribution_navigation_button(method_sheet, "Next")
+        if next_button is None or not bool(next_button.get("enabled", False)):
+            return payload(
+                "failure",
+                "Next is not enabled for the Custom distribution method",
+                data={"native_preflight": preflight_details, "warnings": preflight_warnings, "distribution_sheet": method_sheet, "requested_custom_route": route},
+                next_actions=["Use organizer-distribution-inspect to verify the Custom method is selected."],
+                exit_code=EXIT_CODES["xcode_menu_item_disabled"],
+                error_type="xcode_menu_item_disabled",
+            )
+        advance_custom_result = native_press_button(title="Next", window_title_contains=window_title_contains or "Organizer")
+        advance_custom_payload = parse_native_json(advance_custom_result)
+        if advance_custom_result["exit_code"] != 0 or not isinstance(advance_custom_payload, dict) or advance_custom_payload.get("ok") is not True:
+            return finish_native_result(
+                advance_custom_result,
+                success_summary="Xcode Organizer advanced to Custom route selection",
+                failure_summary="Xcode Organizer failed to advance to Custom route selection",
+                extra_data={"native_preflight": preflight_details, "warnings": preflight_warnings, "requested_custom_route": route},
+                next_actions=["Use organizer-distribution-inspect to re-check the current sheet before retrying."],
+            )
+        time.sleep(0.3)
+        inspect_result, phase = inspect_distribution_phase(window_title_contains)
+        inspect_payload = parse_native_json(inspect_result)
+
+    if phase is None or phase.get("phase_kind") != "custom_method_selection":
+        return payload(
+            "failure",
+            "Xcode Organizer custom distribution route sheet was not found",
+            data={"native_preflight": preflight_details, "warnings": preflight_warnings, "distribution_phase": phase, "native": inspect_payload, "requested_custom_route": route},
+            next_actions=["Start from the distribution-method sheet or the Custom route selection sheet."],
+            exit_code=EXIT_CODES["xcode_menu_item_not_found"],
+            error_type="xcode_menu_item_not_found",
+        )
+
+    route_item = custom_route_control(phase, route)
+    if route_item is None or not bool(route_item.get("enabled", False)):
+        return payload(
+            "failure",
+            "Requested custom distribution route is not available or disabled",
+            data={"native_preflight": preflight_details, "warnings": preflight_warnings, "distribution_phase": phase, "requested_custom_route": route},
+            next_actions=["Use organizer-distribution-step-inspect to choose one of the available custom routes."],
+            exit_code=EXIT_CODES["xcode_menu_item_not_found"] if route_item is None else EXIT_CODES["xcode_menu_item_disabled"],
+            error_type="xcode_menu_item_not_found" if route_item is None else "xcode_menu_item_disabled",
+        )
+
+    select_payload: dict[str, Any] | None = None
+    if phase.get("selected_custom_route") != route:
+        select_result = native_press_control(title=str(route_item["title"]), role="AXRadioButton", window_title_contains=window_title_contains or "Organizer")
+        select_payload = parse_native_json(select_result)
+        if select_result["exit_code"] != 0 or not isinstance(select_payload, dict) or select_payload.get("ok") is not True:
+            return finish_native_result(
+                select_result,
+                success_summary="Xcode Organizer custom distribution route selected for probing",
+                failure_summary="Xcode Organizer custom distribution route selection failed",
+                extra_data={"native_preflight": preflight_details, "warnings": preflight_warnings, "requested_custom_route": route},
+                next_actions=["Use organizer-distribution-step-inspect to confirm the custom route sheet state."],
+            )
+        time.sleep(0.2)
+        verify_result, phase = inspect_distribution_phase(window_title_contains)
+        verify_payload = parse_native_json(verify_result)
+        if phase is None or phase.get("selected_custom_route") != route:
+            return payload(
+                "failure",
+                "Xcode Organizer custom route selection did not verify before probing",
+                data={
+                    "native_preflight": preflight_details,
+                    "warnings": preflight_warnings,
+                    "requested_custom_route": route,
+                    "distribution_phase": phase,
+                    "select_native": select_payload,
+                    "verify_native": verify_payload,
+                },
+                next_actions=["Use organizer-distribution-step-inspect to verify which custom route Xcode currently considers selected."],
+                exit_code=EXIT_CODES["xcode_ide_automation_failed"],
+                error_type="xcode_ide_automation_failed",
+            )
+
+    next_button = distribution_phase_button(phase, "Next")
+    if next_button is None or not bool(next_button.get("enabled", False)):
+        return payload(
+            "failure",
+            "Next is not enabled for the selected custom distribution route",
+            data={"native_preflight": preflight_details, "warnings": preflight_warnings, "distribution_phase": phase, "requested_custom_route": route},
+            next_actions=["Resolve the current custom route sheet state before probing this route."],
+            exit_code=EXIT_CODES["xcode_menu_item_disabled"],
+            error_type="xcode_menu_item_disabled",
+        )
+
+    advance_result = native_press_button(title="Next", window_title_contains=window_title_contains or "Organizer")
+    advance_payload = parse_native_json(advance_result)
+    if advance_result["exit_code"] != 0 or not isinstance(advance_payload, dict) or advance_payload.get("ok") is not True:
+        return finish_native_result(
+            advance_result,
+            success_summary="Xcode Organizer custom distribution route probe advanced",
+            failure_summary="Xcode Organizer custom distribution route probe failed to advance",
+            extra_data={"native_preflight": preflight_details, "warnings": preflight_warnings, "requested_custom_route": route},
+            next_actions=["Use organizer-distribution-step-inspect to re-check the current sheet before retrying."],
+        )
+
+    time.sleep(max(0, settle_seconds))
+    _, phase_after = inspect_distribution_phase(window_title_contains)
+    phase_after, post_payload, visited_phases, warnings, cancel_payload, cancel_ok = safe_probe_loop(
+        current_phase=phase_after,
+        window_title_contains=window_title_contains,
+        cancel_after_inspect=cancel_after_inspect,
+        wait_ready_seconds=wait_ready_seconds,
+        max_safe_steps=max_safe_steps,
+        option_overrides=option_overrides,
+        base_warnings=preflight_warnings,
+        phase_before=phase,
+    )
+
+    if phase_after is None:
+        return payload(
+            "failure",
+            "Xcode Organizer custom distribution route probe could not inspect the next phase",
+            data={
+                "native_preflight": preflight_details,
+                "warnings": warnings,
+                "requested_custom_route": route,
+                "distribution_phase_before": phase,
+                "select_native": select_payload,
+                "advance_native": advance_payload,
+                "post_inspect": post_payload,
+                "visited_phases": visited_phases,
+                "option_overrides": option_overrides,
+                "max_safe_steps": max_safe_steps,
+                "cancel_after_inspect": cancel_after_inspect,
+                "wait_ready_seconds": wait_ready_seconds,
+                "cancel_ok": cancel_ok,
+                "cancel_native": cancel_payload,
+            },
+            warnings=warnings,
+            next_actions=["Use organizer-inspect to inspect the visible Organizer state before continuing."],
+            exit_code=EXIT_CODES["xcode_ide_automation_failed"],
+            error_type="xcode_ide_automation_failed",
+        )
+
+    return payload(
+        "success",
+        "Xcode Organizer custom distribution route probed without pressing final upload/export actions",
+        data={
+            "native_preflight": preflight_details,
+            "warnings": warnings,
+            "requested_custom_route": route,
+            "distribution_phase_before": phase,
+            "select_native": select_payload,
+            "advance_native": advance_payload,
+            "distribution_phase": phase_after,
+            "post_inspect": post_payload,
+            "visited_phases": visited_phases,
+            "option_overrides": option_overrides,
+            "max_safe_steps": max_safe_steps,
+            "cancel_after_inspect": cancel_after_inspect,
+            "wait_ready_seconds": wait_ready_seconds,
+            "cancel_ok": cancel_ok,
+            "cancel_native": cancel_payload,
+        },
+        warnings=warnings,
+        next_actions=[
+            "Review distribution_phase for this custom route's next screen fields and guarded final actions.",
+            "Reopen the distribution-method sheet before probing another route.",
+        ],
+    )
+
+
 def menu_perform_command(action_id: str, *, allow_destructive: bool = False) -> int:
     action_item = MENU_ACTIONS_BY_ID.get(action_id)
     if action_item is None:
@@ -751,6 +2391,39 @@ def menu_perform_command(action_id: str, *, allow_destructive: bool = False) -> 
     preflight_exit, preflight_warnings, preflight_details = native_preflight(require=True, include_ax=True)
     if preflight_exit is not None:
         return preflight_exit
+    native_result = native_menu_press(action_item)
+    native_payload: dict[str, Any] | None = None
+    try:
+        native_payload = json.loads(native_result["stdout"])
+    except json.JSONDecodeError:
+        native_payload = None
+    if native_result["exit_code"] == 0 and isinstance(native_payload, dict) and native_payload.get("ok") is True:
+        return payload(
+            "success",
+            "Xcode menu action performed",
+            data={
+                "action": action_item.as_dict(),
+                "native_preflight": preflight_details,
+                "native_menu": native_payload.get("summary") if isinstance(native_payload, dict) else {},
+            },
+            warnings=preflight_warnings,
+            next_actions=["Use xcode_ide_status or xcode_native_windows to inspect Xcode after the menu action."],
+        )
+    if isinstance(native_payload, dict):
+        error_type = str(native_payload.get("error_type") or "xcode_ide_automation_failed")
+        return payload(
+            "failure",
+            "Xcode menu action failed",
+            data={
+                "action": action_item.as_dict(),
+                "native_preflight": preflight_details,
+                "native_menu": native_payload,
+            },
+            warnings=preflight_warnings + [str(native_payload.get("summary") or "Native menu press failed.")],
+            next_actions=["Use xcode_ide_status or xcode_native_windows to inspect Xcode after the menu action."],
+            exit_code=EXIT_CODES.get(error_type, EXIT_CODES["xcode_ide_automation_failed"]),
+            error_type=error_type,
+        )
     return finish_from_osascript(
         result=run_osascript(menu_press_script(action_item), timeout=15),
         success_summary="Xcode menu action performed",
@@ -758,6 +2431,73 @@ def menu_perform_command(action_id: str, *, allow_destructive: bool = False) -> 
         extra_warnings=preflight_warnings,
         extra_data={"action": action_item.as_dict(), "native_preflight": preflight_details},
         next_actions=["Use xcode_ide_status or xcode_native_windows to inspect Xcode after the menu action."],
+    )
+
+
+def archive_command(
+    *,
+    scheme: str,
+    workspace_path: str | None = None,
+    timeout_seconds: int = 120,
+    require_native_preflight: bool = True,
+) -> int:
+    preflight_exit, preflight_warnings, preflight_details = native_preflight(require=require_native_preflight, include_ax=True)
+    if preflight_exit is not None:
+        return preflight_exit
+    selector = workspace_selector_script(workspace_path)
+    script = f"""
+tell application "Xcode"
+    activate
+    {selector}
+    set requestedScheme to {apple_string(scheme)}
+    set schemeFound to false
+    repeat with s in schemes of w
+        if (name of s as text) is requestedScheme then set schemeFound to true
+    end repeat
+    if schemeFound is false then error "XCODE_PLUGIN_SCHEME_NOT_FOUND"
+    set active scheme of w to scheme requestedScheme of w
+    set out to "workspace\t" & (name of w as text) & linefeed
+    set out to out & "requested_scheme\t" & requestedScheme & linefeed
+    try
+        set out to out & "active_scheme\t" & (name of active scheme of w as text) & linefeed
+    end try
+end tell
+delay 0.2
+tell application "System Events"
+    if not (exists process "Xcode") then error "XCODE_PLUGIN_XCODE_NOT_RUNNING"
+    tell process "Xcode"
+        set frontmost to true
+        if not (exists menu bar item "Product" of menu bar 1) then error "XCODE_PLUGIN_MENU_PATH_NOT_FOUND"
+        set productMenu to menu 1 of menu bar item "Product" of menu bar 1
+        if not (exists menu item "Archive" of productMenu) then error "XCODE_PLUGIN_MENU_PATH_NOT_FOUND"
+        set archiveItem to menu item "Archive" of productMenu
+        set itemEnabled to true
+        try
+            set itemEnabled to enabled of archiveItem
+        end try
+        if itemEnabled is false then error "XCODE_PLUGIN_MENU_ITEM_DISABLED"
+        perform action "AXPress" of archiveItem
+        set out to out & "menu_path\tProduct > Archive" & linefeed
+        set out to out & "archive_menu_pressed\ttrue" & linefeed
+        set out to out & "enabled_before_press\t" & (itemEnabled as text) & linefeed
+    end tell
+end tell
+return out
+"""
+    return finish_from_osascript(
+        result=run_osascript(script, timeout=timeout_seconds + SCRIPT_TIMEOUT_PADDING),
+        success_summary="Xcode GUI archive action started",
+        failure_summary="Xcode GUI archive action failed",
+        extra_warnings=preflight_warnings,
+        extra_data={
+            "native_preflight": preflight_details,
+            "gui_only": True,
+            "route": "Product > Archive",
+        },
+        next_actions=[
+            "Watch Xcode's activity area and Organizer for archive completion.",
+            "Use xcode_native_windows to detect signing or Organizer modal blockers.",
+        ],
     )
 
 
@@ -1076,6 +2816,58 @@ def parse_args() -> argparse.Namespace:
     menu_perform.add_argument("--action-id", required=True)
     menu_perform.add_argument("--allow-destructive", action="store_true")
 
+    subparsers.add_parser("organizer-open", help="Open Xcode Organizer through the trusted GUI path.")
+
+    organizer_inspect = subparsers.add_parser("organizer-inspect", help="Inspect Xcode Organizer through the trusted GUI path.")
+    organizer_inspect.add_argument("--window-title-contains", default="Organizer")
+    organizer_inspect.add_argument("--max-depth", type=int, default=4)
+
+    organizer_press = subparsers.add_parser("organizer-press", help="Press a visible Organizer button through the trusted GUI path.")
+    organizer_press.add_argument("--button-title", required=True)
+    organizer_press.add_argument("--window-title-contains", default="Organizer")
+
+    organizer_distribution_inspect = subparsers.add_parser("organizer-distribution-inspect", help="Inspect the Organizer distribution-method sheet through the trusted GUI path.")
+    organizer_distribution_inspect.add_argument("--window-title-contains", default="Organizer")
+
+    organizer_distribution_select = subparsers.add_parser("organizer-distribution-select", help="Select a distribution method on the Organizer distribution sheet.")
+    organizer_distribution_select.add_argument("--method", choices=DISTRIBUTION_METHODS, required=True)
+    organizer_distribution_select.add_argument("--window-title-contains", default="Organizer")
+
+    organizer_distribution_confirm = subparsers.add_parser("organizer-distribution-confirm", help="Confirm the currently selected distribution method and advance this Organizer phase.")
+    organizer_distribution_confirm.add_argument("--expected-method", choices=DISTRIBUTION_METHODS, default=None)
+    organizer_distribution_confirm.add_argument("--window-title-contains", default="Organizer")
+
+    organizer_distribution_step_inspect = subparsers.add_parser("organizer-distribution-step-inspect", help="Inspect the current Organizer distribution wizard phase through the trusted GUI path.")
+    organizer_distribution_step_inspect.add_argument("--window-title-contains", default="Organizer")
+
+    organizer_distribution_probe = subparsers.add_parser("organizer-distribution-probe-method", help="Enter one Organizer distribution method route, inspect its next phase, and cancel out by default.")
+    organizer_distribution_probe.add_argument("--method", choices=DISTRIBUTION_METHODS, required=True)
+    organizer_distribution_probe.add_argument("--window-title-contains", default="Organizer")
+    organizer_distribution_probe.add_argument("--no-cancel-after-inspect", action="store_true")
+    organizer_distribution_probe.add_argument("--settle-seconds", type=int, default=1)
+    organizer_distribution_probe.add_argument("--wait-ready-seconds", type=int, default=15)
+    organizer_distribution_probe.add_argument("--max-safe-steps", type=int, default=DEFAULT_MAX_SAFE_STEPS)
+    organizer_distribution_probe.add_argument("--option-overrides", default=None)
+
+    organizer_distribution_custom_select = subparsers.add_parser("organizer-distribution-custom-select", help="Select a route on the Organizer Custom distribution sheet.")
+    organizer_distribution_custom_select.add_argument("--route", choices=CUSTOM_DISTRIBUTION_ROUTES, required=True)
+    organizer_distribution_custom_select.add_argument("--window-title-contains", default="Organizer")
+
+    organizer_distribution_custom_probe = subparsers.add_parser("organizer-distribution-probe-custom-route", help="Enter Custom distribution, choose one nested route, inspect its next phase, and cancel out by default.")
+    organizer_distribution_custom_probe.add_argument("--route", choices=CUSTOM_DISTRIBUTION_ROUTES, required=True)
+    organizer_distribution_custom_probe.add_argument("--window-title-contains", default="Organizer")
+    organizer_distribution_custom_probe.add_argument("--no-cancel-after-inspect", action="store_true")
+    organizer_distribution_custom_probe.add_argument("--settle-seconds", type=int, default=1)
+    organizer_distribution_custom_probe.add_argument("--wait-ready-seconds", type=int, default=15)
+    organizer_distribution_custom_probe.add_argument("--max-safe-steps", type=int, default=DEFAULT_MAX_SAFE_STEPS)
+    organizer_distribution_custom_probe.add_argument("--option-overrides", default=None)
+
+    archive_parser = subparsers.add_parser("archive", help="Start Product > Archive through the Xcode GUI.")
+    archive_parser.add_argument("--scheme", required=True)
+    archive_parser.add_argument("--workspace-path", default=None)
+    archive_parser.add_argument("--timeout-seconds", type=int, default=120)
+    archive_parser.add_argument("--require-native-preflight", action="store_true", default=True)
+
     scheme_parser = subparsers.add_parser("set-scheme", help="Set the active Xcode scheme by exact name.")
     scheme_parser.add_argument("--name", required=True)
     scheme_parser.add_argument("--workspace-path", default=None)
@@ -1102,6 +2894,12 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
+    option_overrides: dict[str, Any] = {}
+    if getattr(args, "option_overrides", None) is not None:
+        try:
+            option_overrides = parse_option_overrides(args.option_overrides)
+        except ValueError as exc:
+            return payload("failure", str(exc), data={}, exit_code=EXIT_CODES["usage_error"], error_type="usage_error")
     if args.command == "status":
         return status_command()
     if args.command == "activate":
@@ -1128,6 +2926,49 @@ def main() -> int:
         return menu_catalog_command()
     if args.command == "menu-perform":
         return menu_perform_command(args.action_id, allow_destructive=args.allow_destructive)
+    if args.command == "organizer-open":
+        return organizer_open_command()
+    if args.command == "organizer-inspect":
+        return organizer_inspect_command(args.window_title_contains, args.max_depth)
+    if args.command == "organizer-press":
+        return organizer_press_command(args.button_title, args.window_title_contains)
+    if args.command == "organizer-distribution-inspect":
+        return organizer_distribution_inspect_command(args.window_title_contains)
+    if args.command == "organizer-distribution-select":
+        return organizer_distribution_select_command(args.method, args.window_title_contains)
+    if args.command == "organizer-distribution-confirm":
+        return organizer_distribution_confirm_command(args.expected_method, args.window_title_contains)
+    if args.command == "organizer-distribution-step-inspect":
+        return organizer_distribution_step_inspect_command(args.window_title_contains)
+    if args.command == "organizer-distribution-probe-method":
+        return organizer_distribution_probe_method_command(
+            args.method,
+            args.window_title_contains,
+            cancel_after_inspect=not args.no_cancel_after_inspect,
+            settle_seconds=args.settle_seconds,
+            wait_ready_seconds=args.wait_ready_seconds,
+            max_safe_steps=args.max_safe_steps,
+            option_overrides=option_overrides,
+        )
+    if args.command == "organizer-distribution-custom-select":
+        return organizer_distribution_custom_select_command(args.route, args.window_title_contains)
+    if args.command == "organizer-distribution-probe-custom-route":
+        return organizer_distribution_probe_custom_route_command(
+            args.route,
+            args.window_title_contains,
+            cancel_after_inspect=not args.no_cancel_after_inspect,
+            settle_seconds=args.settle_seconds,
+            wait_ready_seconds=args.wait_ready_seconds,
+            max_safe_steps=args.max_safe_steps,
+            option_overrides=option_overrides,
+        )
+    if args.command == "archive":
+        return archive_command(
+            scheme=args.scheme,
+            workspace_path=args.workspace_path,
+            timeout_seconds=args.timeout_seconds,
+            require_native_preflight=args.require_native_preflight,
+        )
     if args.command == "set-scheme":
         return set_scheme_command(args.name, args.workspace_path, require_native_preflight=args.require_native_preflight)
     if args.command == "set-destination":

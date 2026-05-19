@@ -1,3 +1,4 @@
+import Foundation
 import MCP
 
 enum ArgumentValues {
@@ -59,5 +60,53 @@ enum ArgumentValues {
         }
         argv.append(flag)
         argv.append(raw)
+    }
+
+    static func appendOptionalStringOrJSON(_ value: Value?, flag: String, key: String, to argv: inout [String]) throws {
+        guard let value else {
+            return
+        }
+        if let raw = value.stringValue, !raw.isEmpty {
+            argv.append(flag)
+            argv.append(raw)
+            return
+        }
+        let raw = try jsonString(value, key: key)
+        argv.append(flag)
+        argv.append(raw)
+    }
+
+    static func jsonString(_ value: Value, key: String) throws -> String {
+        let object = try jsonObject(value, key: key)
+        guard JSONSerialization.isValidJSONObject(object) else {
+            throw XcodeToolError.usage("\(key) must be JSON-serializable")
+        }
+        let data = try JSONSerialization.data(withJSONObject: object, options: [.sortedKeys])
+        return String(data: data, encoding: .utf8) ?? "{}"
+    }
+
+    private static func jsonObject(_ value: Value, key: String) throws -> Any {
+        switch value {
+        case .null:
+            return NSNull()
+        case .bool(let raw):
+            return raw
+        case .int(let raw):
+            return raw
+        case .double(let raw):
+            return raw
+        case .string(let raw):
+            return raw
+        case .array(let values):
+            return try values.map { try jsonObject($0, key: key) }
+        case .object(let values):
+            var object: [String: Any] = [:]
+            for (childKey, childValue) in values {
+                object[childKey] = try jsonObject(childValue, key: key)
+            }
+            return object
+        case .data:
+            throw XcodeToolError.usage("\(key) cannot contain binary data")
+        }
     }
 }

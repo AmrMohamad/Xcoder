@@ -64,6 +64,48 @@ enum JSONEnvelope {
         return String(trimmed.prefix(limit)) + "...<truncated>"
     }
 
+    static func compactRedactedText(_ text: String, limit: Int = 1200) -> String {
+        compactText(redactedText(text), limit: limit)
+    }
+
+    static func redactedArguments(_ arguments: [String]) -> [String] {
+        var result: [String] = []
+        var redactNext = false
+
+        for argument in arguments {
+            if redactNext {
+                result.append("<redacted>")
+                redactNext = false
+                continue
+            }
+
+            if let redactedInline = redactedInlineFlag(argument) {
+                result.append(redactedInline)
+                continue
+            }
+
+            result.append(redactedText(argument))
+            if sensitiveArgumentFlags.contains(argument) {
+                redactNext = true
+            }
+        }
+
+        return result
+    }
+
+    static func redactedText(_ text: String) -> String {
+        var redacted = text
+        let replacements: [(pattern: String, template: String)] = [
+            (#"(?i)("[^"]*(?:api_key_path|api_key_id|issuer_id|apiKey|apiIssuer|credentials_ref)[^"]*"\s*:\s*")([^"]*)(")"#, "$1<redacted>$3"),
+            (#"(?i)(--(?:api-key-path|api-key-id|issuer-id|credentials-ref|apiKey|apiIssuer|api_key_path|api_key_id|issuer_id)(?:=|\s+))([^\s"']+)"#, "$1<redacted>"),
+            (#"[^\s"']*AuthKey_[^\s"']*\.p8"#, "<redacted>")
+        ]
+        for replacement in replacements {
+            redacted = replace(pattern: replacement.pattern, in: redacted, with: replacement.template)
+        }
+        return redacted
+    }
+
     static func compactJSONString(_ object: Any) -> String {
         guard JSONSerialization.isValidJSONObject(object),
               let data = try? JSONSerialization.data(withJSONObject: object, options: [.sortedKeys]),
@@ -72,5 +114,35 @@ enum JSONEnvelope {
             return "{}"
         }
         return string
+    }
+
+    private static let sensitiveArgumentFlags: Set<String> = [
+        "--api-key-path",
+        "--api-key-id",
+        "--issuer-id",
+        "--credentials-ref",
+        "--apiKey",
+        "--apiIssuer",
+        "--api_key_path",
+        "--api_key_id",
+        "--issuer_id"
+    ]
+
+    private static func redactedInlineFlag(_ argument: String) -> String? {
+        for flag in sensitiveArgumentFlags {
+            let prefix = "\(flag)="
+            if argument.hasPrefix(prefix) {
+                return "\(prefix)<redacted>"
+            }
+        }
+        return nil
+    }
+
+    private static func replace(pattern: String, in text: String, with template: String) -> String {
+        guard let regex = try? NSRegularExpression(pattern: pattern) else {
+            return text
+        }
+        let range = NSRange(text.startIndex..<text.endIndex, in: text)
+        return regex.stringByReplacingMatches(in: text, options: [], range: range, withTemplate: template)
     }
 }

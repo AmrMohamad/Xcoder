@@ -68,6 +68,13 @@ xcode_ide_build
 xcode_ide_test
 xcode_ide_run
 xcode_run_app
+xcode_archive
+xcode_organizer_open
+xcode_organizer_inspect
+xcode_organizer_press
+xcode_export_archive
+xcode_upload_archive
+xcode_distribute
 xcode_simulator_resolve
 xcode_results_summary
 xcode_warnings_summary

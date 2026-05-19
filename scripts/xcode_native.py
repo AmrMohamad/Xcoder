@@ -70,6 +70,19 @@ def parse_args() -> argparse.Namespace:
     ax_sub = ax.add_subparsers(dest="command", required=True)
     ax_windows = ax_sub.add_parser("xcode-windows", help="Read Xcode windows/sheets/modal blockers without mutation.")
     ax_windows.add_argument("--include-paths", action="store_true", help="Include full local document paths instead of redacted basenames.")
+    ax_press_menu = ax_sub.add_parser("press-menu", help="Press a typed Xcode menu path through the trusted native helper.")
+    ax_press_menu.add_argument("--menu-path-json", required=True, help="JSON array of menu labels, for example [\"Product\", \"Archive\"].")
+    ax_inspect = ax_sub.add_parser("inspect", help="Inspect a filtered Xcode AX tree through the trusted native helper.")
+    ax_inspect.add_argument("--window-title-contains", default=None)
+    ax_inspect.add_argument("--max-depth", type=int, default=3)
+    ax_inspect.add_argument("--max-children", type=int, default=80)
+    ax_press_button = ax_sub.add_parser("press-button", help="Press a named Xcode button through the trusted native helper.")
+    ax_press_button.add_argument("--title", required=True)
+    ax_press_button.add_argument("--window-title-contains", default=None)
+    ax_press_control = ax_sub.add_parser("press-control", help="Press a named Xcode AX control through the trusted native helper.")
+    ax_press_control.add_argument("--role", choices=["AXRadioButton", "AXCheckBox", "AXPopUpButton"], required=True)
+    ax_press_control.add_argument("--title", required=True)
+    ax_press_control.add_argument("--window-title-contains", default=None)
 
     return parser.parse_args()
 
@@ -82,6 +95,20 @@ def helper_argv(args: argparse.Namespace) -> list[str]:
     argv = [args.group, args.command]
     if args.group == "app" and args.command == "open-workspace":
         argv.extend(["--path", args.path])
+    if args.group == "ax" and args.command == "press-menu":
+        argv.extend(["--menu-path-json", args.menu_path_json])
+    if args.group == "ax" and args.command == "inspect":
+        if args.window_title_contains:
+            argv.extend(["--window-title-contains", args.window_title_contains])
+        argv.extend(["--max-depth", str(args.max_depth), "--max-children", str(args.max_children)])
+    if args.group == "ax" and args.command == "press-button":
+        argv.extend(["--title", args.title])
+        if args.window_title_contains:
+            argv.extend(["--window-title-contains", args.window_title_contains])
+    if args.group == "ax" and args.command == "press-control":
+        argv.extend(["--role", args.role, "--title", args.title])
+        if args.window_title_contains:
+            argv.extend(["--window-title-contains", args.window_title_contains])
     argv.append("--json")
     return argv
 
@@ -95,6 +122,10 @@ def helper_timeout(args: argparse.Namespace) -> int:
         return 30
     if args.group == "helper" or args.group == "permissions":
         return 5
+    if args.group == "ax" and args.command in {"press-menu", "press-button", "press-control"}:
+        return 15
+    if args.group == "ax" and args.command == "inspect":
+        return 20
     if args.group == "ax":
         return 10
     if args.group == "app" and args.command in {"activate-xcode", "open-workspace"}:
@@ -501,7 +532,7 @@ def normalize_helper_output(args: argparse.Namespace, native: dict[str, Any], re
 
     ok = bool(native.get("ok"))
     summary = summary_value or ("Native helper command succeeded" if ok else "Native helper command failed")
-    if ok and result["exit_code"] == 0:
+    if ok and (result["exit_code"] == 0 or result.get("launchservices")):
         return emit_success(command_name(args), summary, details=details, warnings=warnings)
 
     native_error = str(native.get("error_type") or "native_helper_failed")

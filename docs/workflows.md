@@ -35,6 +35,10 @@ mcp__xcode__xcode_ide_build
 mcp__xcode__xcode_ide_test
 mcp__xcode__xcode_ide_run
 mcp__xcode__xcode_run_app
+mcp__xcode__xcode_archive
+mcp__xcode__xcode_export_archive
+mcp__xcode__xcode_upload_archive
+mcp__xcode__xcode_distribute
 mcp__xcode__xcode_simulator_resolve
 mcp__xcode__xcode_results_summary
 mcp__xcode__xcode_warnings_summary
@@ -43,7 +47,7 @@ mcp__xcode__xcode_help
 
 These tools are wrappers over `bin/xcode`. They are the primary discovery surface, not a separate Xcode implementation.
 
-Use `xcode_help` when Codex needs canonical local guidance before choosing a route. Supported topics are `first-time`, `ide-vs-cli`, `fail-recovery`, `scheme-not-testable`, `destination-ambiguous`, `build-json`, and `package-release`.
+Use `xcode_help` when Codex needs canonical local guidance before choosing a route. Supported topics are `first-time`, `ide-vs-cli`, `fail-recovery`, `scheme-not-testable`, `destination-ambiguous`, `build-json`, `distribution`, and `package-release`.
 
 Use `xcode_ide_menu_catalog` to inspect the typed Xcode menu map. Use `xcode_ide_menu_perform` only with an `action_id` returned by that catalog. The menu performer never accepts raw menu paths or arbitrary Accessibility selectors. Destructive menu actions are rejected unless `allow_destructive` is true; external-effect and dynamic project-specific menu entries are cataloged but intentionally blocked in this pass. Prefer existing typed tools such as `xcode_ide_build`, `xcode_ide_test`, `xcode_ide_run`, `xcode_ide_list_schemes`, and `xcode_ide_list_destinations` over menu pressing when those routes exist.
 
@@ -110,6 +114,26 @@ bin/xcode build \
 ```
 
 `bin/xcode build --json` emits one clean `xcode-plugin.v0.3` envelope on stdout. Raw build stdout/stderr are written to artifact logs referenced from the envelope.
+
+## Distribution
+
+Distribution is GUI-only. `xcode_archive` starts Xcode's Product > Archive menu action after native window/modal preflight. Organizer steps are handled by typed GUI tools: `xcode_organizer_open`, `xcode_organizer_inspect`, and `xcode_organizer_press`. The distribution-method sheet now has a safer phase-specific route through `xcode_organizer_distribution_inspect`, `xcode_organizer_distribution_select_method`, and `xcode_organizer_distribution_confirm`. Downstream route screens are inspected with `xcode_organizer_distribution_step_inspect`; `xcode_organizer_distribution_probe_method` can enter one route, inspect its next screen, and cancel out by default before pressing any final upload/export action. The nested Custom route sheet is handled through `xcode_organizer_distribution_select_custom_route` and `xcode_organizer_distribution_probe_custom_route`. Command-line archive/export/upload is blocked; `xcode_export_archive`, `xcode_upload_archive`, and `xcode_distribute` remain guarded until the full form-specific Organizer workflow is implemented.
+
+```bash
+bin/xcode distribution archive \
+  --workspace-path App.xcworkspace \
+  --scheme App \
+  --dry-run \
+  --json
+
+bin/xcode ide organizer-open --json
+bin/xcode ide organizer-inspect --window-title-contains Organizer --json
+bin/xcode ide organizer-distribution-inspect --json
+bin/xcode ide organizer-distribution-select --method 'App Store Connect' --json
+bin/xcode ide organizer-distribution-confirm --expected-method 'App Store Connect' --json
+```
+
+`xcode_export_archive`, `xcode_upload_archive`, and `xcode_distribute` return `xcode_distribution_requires_gui` instead of running command-line export/upload.
 
 ## Build For Testing / Test Without Building
 

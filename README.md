@@ -89,9 +89,14 @@ bin/xcode workflow run-app --project-path App.xcodeproj --scheme App --destinati
 bin/xcode context --path App.xcodeproj --scheme App --json
 bin/xcode simulator resolve --name "iPhone SE (3rd generation)" --runtime "iOS 18.5" --json
 bin/xcode build --project App.xcodeproj --scheme App --destination 'platform=iOS Simulator,id=<UDID>' --action build --dry-run --json
+bin/xcode distribution archive --workspace-path App.xcworkspace --scheme App --dry-run --json
+bin/xcode ide organizer-open --json
+bin/xcode ide organizer-inspect --window-title-contains Organizer --json
 ```
 
 The terminal is still the transport for `bin/xcode`, but explicit plugin invocation should not bypass Xcoder with bare `xcodebuild`, `xcrun simctl`, `simctl`, `xcresulttool`, `osascript`, `open -a Xcode`, or the old `xcode-cli-shared-cache-build` skill.
+
+Distribution is GUI-only: archive starts through Xcode Product > Archive, and Organizer is handled through typed GUI open/inspect/press controls. Command-line export/upload/distribute remains blocked.
 
 The MCP server remains a Codex-managed stdio child process, not a daemon. It drains child stdout/stderr while `bin/xcode` runs, cleans up active child processes on shutdown, and publishes lightweight CLI-only health state for diagnostics.
 
@@ -114,7 +119,7 @@ bin/xcode package audit --zip /tmp/xcode-plugin-0.4.5.zip --json
 - `xcode-doctor`: local Xcode/toolchain/plugin checks.
 - `xcode-ide-automation`: AppleScript/JXA control of the open Xcode app for IDE-specific actions.
 - `xcode-native-helper` / `XcodeNativeHelper.app`: optional Swift helper for Xcode process state, installed Xcode discovery, permission status, workspace opening, and read-only AX window/modal inspection. Accessibility-sensitive commands launch the bundled app through LaunchServices so TCC evaluates the helper bundle rather than Codex's internal parent process.
-- `xcode-mcp-server`: bundled Swift MCP stdio server exposing typed tools that call `bin/xcode`, including IDE status, workspace, scheme, destination, typed menu control, test, and help tools.
+- `xcode-mcp-server`: bundled Swift MCP stdio server exposing typed tools that call `bin/xcode`, including IDE status, workspace, scheme, destination, typed menu control, test, distribution, and help tools.
 - `xcode-workflows`: GUI-first guidance for choosing IDE, native helper, simulator, results, warnings, doctor, or CLI fallback flows.
 
 ## Contract

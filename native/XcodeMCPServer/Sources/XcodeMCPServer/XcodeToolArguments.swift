@@ -52,6 +52,109 @@ enum XcodeToolArguments {
             }
             argv.append("--json")
             return argv
+        case "xcode_organizer_open":
+            return ["ide", "organizer-open", "--json"]
+        case "xcode_organizer_inspect":
+            var argv = ["ide", "organizer-inspect"]
+            ArgumentValues.appendOptionalString(arguments["window_title_contains"], flag: "--window-title-contains", to: &argv)
+            argv.append("--max-depth")
+            argv.append(String(ArgumentValues.int(arguments["max_depth"], default: 4)))
+            argv.append("--json")
+            return argv
+        case "xcode_organizer_press":
+            var argv = [
+                "ide", "organizer-press",
+                "--button-title", try ArgumentValues.requiredString(arguments["button_title"], key: "button_title")
+            ]
+            ArgumentValues.appendOptionalString(arguments["window_title_contains"], flag: "--window-title-contains", to: &argv)
+            argv.append("--json")
+            return argv
+        case "xcode_organizer_distribution_inspect":
+            var argv = ["ide", "organizer-distribution-inspect"]
+            ArgumentValues.appendOptionalString(arguments["window_title_contains"], flag: "--window-title-contains", to: &argv)
+            argv.append("--json")
+            return argv
+        case "xcode_organizer_distribution_select_method":
+            var argv = [
+                "ide", "organizer-distribution-select",
+                "--method", try ArgumentValues.requiredString(arguments["method"], key: "method")
+            ]
+            ArgumentValues.appendOptionalString(arguments["window_title_contains"], flag: "--window-title-contains", to: &argv)
+            argv.append("--json")
+            return argv
+        case "xcode_organizer_distribution_confirm":
+            var argv = ["ide", "organizer-distribution-confirm"]
+            ArgumentValues.appendOptionalString(arguments["expected_method"], flag: "--expected-method", to: &argv)
+            ArgumentValues.appendOptionalString(arguments["window_title_contains"], flag: "--window-title-contains", to: &argv)
+            argv.append("--json")
+            return argv
+        case "xcode_organizer_distribution_step_inspect":
+            var argv = ["ide", "organizer-distribution-step-inspect"]
+            ArgumentValues.appendOptionalString(arguments["window_title_contains"], flag: "--window-title-contains", to: &argv)
+            argv.append("--json")
+            return argv
+        case "xcode_organizer_distribution_probe_method":
+            var argv = [
+                "ide", "organizer-distribution-probe-method",
+                "--method", try ArgumentValues.requiredString(arguments["method"], key: "method")
+            ]
+            ArgumentValues.appendOptionalString(arguments["window_title_contains"], flag: "--window-title-contains", to: &argv)
+            if ArgumentValues.bool(arguments["cancel_after_inspect"], default: true) == false {
+                argv.append("--no-cancel-after-inspect")
+            }
+            let settleSeconds = ArgumentValues.int(arguments["settle_seconds"], default: 1)
+            if settleSeconds != 1 {
+                argv.append("--settle-seconds")
+                argv.append(String(settleSeconds))
+            }
+            let waitReadySeconds = ArgumentValues.int(arguments["wait_ready_seconds"], default: 15)
+            if waitReadySeconds != 15 {
+                argv.append("--wait-ready-seconds")
+                argv.append(String(waitReadySeconds))
+            }
+            let maxSafeSteps = ArgumentValues.int(arguments["max_safe_steps"], default: 4)
+            if maxSafeSteps != 4 {
+                argv.append("--max-safe-steps")
+                argv.append(String(maxSafeSteps))
+            }
+            try ArgumentValues.appendOptionalStringOrJSON(arguments["option_overrides"], flag: "--option-overrides", key: "option_overrides", to: &argv)
+            argv.append("--json")
+            return argv
+        case "xcode_organizer_distribution_select_custom_route":
+            var argv = [
+                "ide", "organizer-distribution-custom-select",
+                "--route", try ArgumentValues.requiredString(arguments["route"], key: "route")
+            ]
+            ArgumentValues.appendOptionalString(arguments["window_title_contains"], flag: "--window-title-contains", to: &argv)
+            argv.append("--json")
+            return argv
+        case "xcode_organizer_distribution_probe_custom_route":
+            var argv = [
+                "ide", "organizer-distribution-probe-custom-route",
+                "--route", try ArgumentValues.requiredString(arguments["route"], key: "route")
+            ]
+            ArgumentValues.appendOptionalString(arguments["window_title_contains"], flag: "--window-title-contains", to: &argv)
+            if ArgumentValues.bool(arguments["cancel_after_inspect"], default: true) == false {
+                argv.append("--no-cancel-after-inspect")
+            }
+            let settleSeconds = ArgumentValues.int(arguments["settle_seconds"], default: 1)
+            if settleSeconds != 1 {
+                argv.append("--settle-seconds")
+                argv.append(String(settleSeconds))
+            }
+            let waitReadySeconds = ArgumentValues.int(arguments["wait_ready_seconds"], default: 15)
+            if waitReadySeconds != 15 {
+                argv.append("--wait-ready-seconds")
+                argv.append(String(waitReadySeconds))
+            }
+            let maxSafeSteps = ArgumentValues.int(arguments["max_safe_steps"], default: 4)
+            if maxSafeSteps != 4 {
+                argv.append("--max-safe-steps")
+                argv.append(String(maxSafeSteps))
+            }
+            try ArgumentValues.appendOptionalStringOrJSON(arguments["option_overrides"], flag: "--option-overrides", key: "option_overrides", to: &argv)
+            argv.append("--json")
+            return argv
         case "xcode_ide_preflight":
             var argv = ["ide", "preflight"]
             ArgumentValues.appendOptionalString(arguments["workspace_path"], flag: "--workspace-path", to: &argv)
@@ -88,6 +191,67 @@ enum XcodeToolArguments {
             if !ArgumentValues.bool(arguments["allow_cli_fallback"], default: true) {
                 argv.append("--no-cli-fallback")
             }
+            argv.append("--json")
+            return argv
+        case "xcode_archive":
+            var argv = [
+                "distribution", "archive",
+                "--workspace-path", try ArgumentValues.requiredString(arguments["workspace_path"], key: "workspace_path"),
+                "--scheme", try ArgumentValues.requiredString(arguments["scheme"], key: "scheme"),
+                "--configuration", ArgumentValues.string(arguments["configuration"], default: "Release"),
+                "--destination", ArgumentValues.string(arguments["destination"], default: "generic/platform=iOS"),
+                "--timeout-seconds", String(ArgumentValues.int(arguments["timeout_seconds"], default: 3600))
+            ]
+            ArgumentValues.appendOptionalString(arguments["archive_path"], flag: "--archive-path", to: &argv)
+            appendDistributionModeFlags(arguments, to: &argv)
+            argv.append("--json")
+            return argv
+        case "xcode_export_archive":
+            var argv = [
+                "distribution", "export-archive",
+                "--archive-path", try ArgumentValues.requiredString(arguments["archive_path"], key: "archive_path"),
+                "--export-method", try ArgumentValues.requiredString(arguments["export_method"], key: "export_method"),
+                "--export-path", try ArgumentValues.requiredString(arguments["export_path"], key: "export_path"),
+                "--timeout-seconds", String(ArgumentValues.int(arguments["timeout_seconds"], default: 1800))
+            ]
+            ArgumentValues.appendOptionalString(arguments["team_id"], flag: "--team-id", to: &argv)
+            ArgumentValues.appendOptionalString(arguments["signing_style"], flag: "--signing-style", to: &argv)
+            try ArgumentValues.appendOptionalStringOrJSON(arguments["export_options"], flag: "--export-options", key: "export_options", to: &argv)
+            appendDistributionModeFlags(arguments, to: &argv)
+            argv.append("--json")
+            return argv
+        case "xcode_upload_archive":
+            var argv = [
+                "distribution", "upload-archive",
+                "--timeout-seconds", String(ArgumentValues.int(arguments["timeout_seconds"], default: 1800))
+            ]
+            ArgumentValues.appendOptionalString(arguments["ipa_path"], flag: "--ipa-path", to: &argv)
+            ArgumentValues.appendOptionalString(arguments["archive_path"], flag: "--archive-path", to: &argv)
+            ArgumentValues.appendOptionalString(arguments["provider"], flag: "--provider", to: &argv)
+            ArgumentValues.appendOptionalString(arguments["api_key_id"], flag: "--api-key-id", to: &argv)
+            ArgumentValues.appendOptionalString(arguments["issuer_id"], flag: "--issuer-id", to: &argv)
+            ArgumentValues.appendOptionalString(arguments["api_key_path"], flag: "--api-key-path", to: &argv)
+            ArgumentValues.appendOptionalString(arguments["api_key_env"], flag: "--api-key-env", to: &argv)
+            appendDistributionModeFlags(arguments, to: &argv)
+            argv.append("--json")
+            return argv
+        case "xcode_distribute":
+            var argv = [
+                "distribution", "distribute",
+                "--workspace-path", try ArgumentValues.requiredString(arguments["workspace_path"], key: "workspace_path"),
+                "--scheme", try ArgumentValues.requiredString(arguments["scheme"], key: "scheme"),
+                "--export-method", try ArgumentValues.requiredString(arguments["export_method"], key: "export_method"),
+                "--destination-channel", try ArgumentValues.requiredString(arguments["destination_channel"], key: "destination_channel"),
+                "--team-id", try ArgumentValues.requiredString(arguments["team_id"], key: "team_id"),
+                "--configuration", ArgumentValues.string(arguments["configuration"], default: "Release"),
+                "--destination", ArgumentValues.string(arguments["destination"], default: "generic/platform=iOS"),
+                "--timeout-seconds", String(ArgumentValues.int(arguments["timeout_seconds"], default: 5400))
+            ]
+            try ArgumentValues.appendOptionalStringOrJSON(arguments["credentials_ref"], flag: "--credentials-ref", key: "credentials_ref", to: &argv)
+            ArgumentValues.appendOptionalString(arguments["archive_path"], flag: "--archive-path", to: &argv)
+            ArgumentValues.appendOptionalString(arguments["export_path"], flag: "--export-path", to: &argv)
+            ArgumentValues.appendOptionalString(arguments["signing_style"], flag: "--signing-style", to: &argv)
+            appendDistributionModeFlags(arguments, to: &argv)
             argv.append("--json")
             return argv
         case "xcode_simulator_resolve":
@@ -141,5 +305,14 @@ enum XcodeToolArguments {
         ArgumentValues.appendOptionalString(arguments["destination_name"], flag: "--destination-name", to: &argv)
         argv.append("--json")
         return argv
+    }
+
+    private static func appendDistributionModeFlags(_ arguments: [String: Value], to argv: inout [String]) {
+        if ArgumentValues.bool(arguments["dry_run"], default: false) {
+            argv.append("--dry-run")
+        }
+        if ArgumentValues.bool(arguments["preflight_only"], default: false) {
+            argv.append("--preflight-only")
+        }
     }
 }

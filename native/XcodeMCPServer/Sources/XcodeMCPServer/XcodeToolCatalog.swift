@@ -16,6 +16,7 @@ enum XcodeToolCatalog {
         "scheme-not-testable",
         "destination-ambiguous",
         "build-json",
+        "distribution",
         "package-release"
     ]
 
@@ -135,6 +136,134 @@ enum XcodeToolCatalog {
             annotations: mutatingAnnotations
         ),
         .init(
+            name: "xcode_organizer_open",
+            description: "Open Xcode Organizer through the trusted GUI path using Xcode's Window > Organizer menu item.",
+            timeoutSeconds: 30,
+            inputSchema: objectSchema(),
+            annotations: mutatingAnnotations
+        ),
+        .init(
+            name: "xcode_organizer_inspect",
+            description: "Inspect the Xcode Organizer GUI through the trusted native Accessibility helper before pressing distribution controls.",
+            timeoutSeconds: 30,
+            inputSchema: objectSchema(
+                properties: [
+                    "window_title_contains": stringSchema(description: "Organizer window title filter.", defaultValue: "Organizer"),
+                    "max_depth": intSchema(description: "AX tree depth to inspect.", defaultValue: 4)
+                ]
+            ),
+            annotations: readOnlyAnnotations
+        ),
+        .init(
+            name: "xcode_organizer_press",
+            description: "Press a visible enabled Xcode Organizer button through the trusted GUI path, such as Distribute App.",
+            timeoutSeconds: 30,
+            inputSchema: objectSchema(
+                properties: [
+                    "button_title": enumStringSchema(description: "Visible Organizer button title to press.", values: ["Distribute App", "Validate App", "Export App", "Done", "Next", "Continue", "Upload", "Cancel"], examples: ["Distribute App"]),
+                    "window_title_contains": stringSchema(description: "Organizer window title filter.", defaultValue: "Organizer")
+                ],
+                required: ["button_title"]
+            ),
+            annotations: mutatingAnnotations
+        ),
+        .init(
+            name: "xcode_organizer_distribution_inspect",
+            description: "Inspect the Organizer distribution-method sheet as structured data, including the available routes and navigation buttons.",
+            timeoutSeconds: 30,
+            inputSchema: objectSchema(
+                properties: [
+                    "window_title_contains": stringSchema(description: "Organizer window title filter.", defaultValue: "Organizer")
+                ]
+            ),
+            annotations: readOnlyAnnotations
+        ),
+        .init(
+            name: "xcode_organizer_distribution_select_method",
+            description: "Select one distribution method on the Organizer distribution-method sheet through the trusted GUI path.",
+            timeoutSeconds: 30,
+            inputSchema: objectSchema(
+                properties: [
+                    "method": enumStringSchema(description: "Distribution method to select on the Organizer sheet.", values: ["App Store Connect", "TestFlight Internal Only", "Release Testing", "Enterprise", "Debugging", "Custom"], examples: ["App Store Connect"]),
+                    "window_title_contains": stringSchema(description: "Organizer window title filter.", defaultValue: "Organizer")
+                ],
+                required: ["method"]
+            ),
+            annotations: mutatingAnnotations
+        ),
+        .init(
+            name: "xcode_organizer_distribution_confirm",
+            description: "Confirm the currently selected distribution method and advance past the Organizer distribution-method phase only when the sheet state is verified.",
+            timeoutSeconds: 30,
+            inputSchema: objectSchema(
+                properties: [
+                    "expected_method": enumStringSchema(description: "Optional selected method that must match before pressing Distribute.", values: ["App Store Connect", "TestFlight Internal Only", "Release Testing", "Enterprise", "Debugging", "Custom"], examples: ["App Store Connect"]),
+                    "window_title_contains": stringSchema(description: "Organizer window title filter.", defaultValue: "Organizer")
+                ]
+            ),
+            annotations: mutatingAnnotations
+        ),
+        .init(
+            name: "xcode_organizer_distribution_step_inspect",
+            description: "Inspect the current Organizer distribution wizard phase and report visible fields, progress text, navigation, and guarded final actions without pressing anything.",
+            timeoutSeconds: 30,
+            inputSchema: objectSchema(
+                properties: [
+                    "window_title_contains": stringSchema(description: "Organizer window title filter.", defaultValue: "Organizer")
+                ]
+            ),
+            annotations: readOnlyAnnotations
+        ),
+        .init(
+            name: "xcode_organizer_distribution_probe_method",
+            description: "Safely enter one Organizer distribution method route, inspect its next screen, and cancel out by default before any final upload/export action.",
+            timeoutSeconds: 45,
+            inputSchema: objectSchema(
+                properties: [
+                    "method": enumStringSchema(description: "Distribution method route to probe.", values: ["App Store Connect", "TestFlight Internal Only", "Release Testing", "Enterprise", "Debugging", "Custom"], examples: ["TestFlight Internal Only"]),
+                    "window_title_contains": stringSchema(description: "Organizer window title filter.", defaultValue: "Organizer"),
+                    "cancel_after_inspect": boolSchema(description: "Cancel the distribution wizard after inspecting the next route screen.", defaultValue: true),
+                    "settle_seconds": intSchema(description: "Seconds to wait after advancing before inspection.", defaultValue: 1),
+                    "wait_ready_seconds": intSchema(description: "Additional seconds to poll until the route screen exposes an enabled Next or guarded final action.", defaultValue: 15),
+                    "max_safe_steps": intSchema(description: "Maximum number of safe non-final Next advances before the probe stops.", defaultValue: 4),
+                    "option_overrides": freeFormObjectSchema(description: "Optional stable option ids to apply during the probe, such as custom_destination, strip_swift_symbols, or include_manifest.")
+                ],
+                required: ["method"]
+            ),
+            annotations: mutatingAnnotations
+        ),
+        .init(
+            name: "xcode_organizer_distribution_select_custom_route",
+            description: "Select one nested route on the Organizer Custom distribution sheet through the trusted GUI path.",
+            timeoutSeconds: 30,
+            inputSchema: objectSchema(
+                properties: [
+                    "route": enumStringSchema(description: "Custom distribution route to select.", values: ["App Store Connect", "Release Testing", "Enterprise", "Debugging"], examples: ["Release Testing"]),
+                    "window_title_contains": stringSchema(description: "Organizer window title filter.", defaultValue: "Organizer")
+                ],
+                required: ["route"]
+            ),
+            annotations: mutatingAnnotations
+        ),
+        .init(
+            name: "xcode_organizer_distribution_probe_custom_route",
+            description: "Safely enter Custom distribution, choose one nested route, inspect its next screen, and cancel out by default before any final upload/export action.",
+            timeoutSeconds: 45,
+            inputSchema: objectSchema(
+                properties: [
+                    "route": enumStringSchema(description: "Custom distribution route to probe.", values: ["App Store Connect", "Release Testing", "Enterprise", "Debugging"], examples: ["Debugging"]),
+                    "window_title_contains": stringSchema(description: "Organizer window title filter.", defaultValue: "Organizer"),
+                    "cancel_after_inspect": boolSchema(description: "Cancel the distribution wizard after inspecting the custom route screen.", defaultValue: true),
+                    "settle_seconds": intSchema(description: "Seconds to wait after advancing before inspection.", defaultValue: 1),
+                    "wait_ready_seconds": intSchema(description: "Additional seconds to poll until the custom route screen exposes an enabled Next or guarded final action.", defaultValue: 15),
+                    "max_safe_steps": intSchema(description: "Maximum number of safe non-final Next advances before the probe stops.", defaultValue: 4),
+                    "option_overrides": freeFormObjectSchema(description: "Optional stable option ids to apply during the probe, such as custom_destination, strip_swift_symbols, or include_manifest.")
+                ],
+                required: ["route"]
+            ),
+            annotations: mutatingAnnotations
+        ),
+        .init(
             name: "xcode_ide_preflight",
             description: "Check Xcode GUI readiness, workspace, scheme, destination, and native modal blockers before IDE automation. Examples: 1. workspace_path=\"/Users/me/App/App.xcodeproj\", scheme=\"App\". 2. workspace_path=\"/Users/me/App/App.xcworkspace\", scheme=\"AppTests\", destination_name=\"iPhone 16\".",
             timeoutSeconds: 30,
@@ -216,6 +345,91 @@ enum XcodeToolCatalog {
                     "timeout_seconds": intSchema(description: "End-to-end workflow timeout in seconds.", defaultValue: 900)
                 ],
                 required: ["project_path", "scheme"]
+            ),
+            annotations: mutatingAnnotations
+        ),
+        .init(
+            name: "xcode_archive",
+            description: "Start an iOS archive through the Xcode GUI Product > Archive action. This tool is GUI-only and does not run command-line archive.",
+            timeoutSeconds: XcodeMCPTimeouts.protocolSafeToolSeconds,
+            inputSchema: objectSchema(
+                properties: [
+                    "workspace_path": stringSchema(description: "Path to .xcworkspace or .xcodeproj."),
+                    "scheme": stringSchema(description: "Scheme to archive."),
+                    "configuration": stringSchema(description: "Build configuration.", defaultValue: "Release"),
+                    "destination": stringSchema(description: "Archive destination.", defaultValue: "generic/platform=iOS"),
+                    "archive_path": stringSchema(description: "Ignored in GUI-only mode; Xcode Organizer owns archive location."),
+                    "timeout_seconds": intSchema(description: "GUI archive start timeout in seconds.", defaultValue: 3600),
+                    "dry_run": boolSchema(description: "Return the GUI archive plan without pressing Product > Archive.", defaultValue: false),
+                    "preflight_only": boolSchema(description: "Run GUI/modal preflight and stop before Product > Archive.", defaultValue: false)
+                ],
+                required: ["workspace_path", "scheme"]
+            ),
+            annotations: mutatingAnnotations
+        ),
+        .init(
+            name: "xcode_export_archive",
+            description: "Blocked until GUI-only Xcode Organizer export automation is implemented. This tool refuses command-line export.",
+            timeoutSeconds: XcodeMCPTimeouts.protocolSafeToolSeconds,
+            inputSchema: objectSchema(
+                properties: [
+                    "archive_path": stringSchema(description: "Path to the .xcarchive."),
+                    "export_method": stringSchema(description: "Export method, such as app-store-connect, ad-hoc, enterprise, or development."),
+                    "team_id": stringSchema(description: "Apple Developer Team ID. Redacted from output."),
+                    "signing_style": enumStringSchema(description: "Export signing style.", values: ["automatic", "manual"], defaultValue: "automatic", examples: ["automatic"]),
+                    "export_path": stringSchema(description: "Directory where the IPA should be exported."),
+                    "export_options": freeFormObjectSchema(description: "Additional ExportOptions.plist keys to merge before export."),
+                    "timeout_seconds": intSchema(description: "Export timeout in seconds for the plugin-routed command.", defaultValue: 1800),
+                    "dry_run": boolSchema(description: "Validate export options and return the export plan without exporting.", defaultValue: false),
+                    "preflight_only": boolSchema(description: "Alias for dry-run style export preflight.", defaultValue: false)
+                ],
+                required: ["archive_path", "export_method", "export_path"]
+            ),
+            annotations: mutatingAnnotations
+        ),
+        .init(
+            name: "xcode_upload_archive",
+            description: "Blocked until GUI-only Xcode Organizer upload automation is implemented. This tool refuses command-line upload.",
+            timeoutSeconds: XcodeMCPTimeouts.protocolSafeToolSeconds,
+            inputSchema: objectSchema(
+                properties: [
+                    "ipa_path": stringSchema(description: "Path to an exported IPA. Required unless archive_path resolves to an IPA."),
+                    "archive_path": stringSchema(description: "Path used for metadata context or an exported directory containing an IPA."),
+                    "provider": stringSchema(description: "Optional App Store Connect provider short name."),
+                    "api_key_id": stringSchema(description: "App Store Connect API key id. Redacted from output."),
+                    "issuer_id": stringSchema(description: "App Store Connect issuer id. Redacted from output."),
+                    "api_key_path": stringSchema(description: "Path to the App Store Connect .p8 key. Redacted from output."),
+                    "api_key_env": stringSchema(description: "Environment variable whose value is the .p8 key path. Value is redacted."),
+                    "timeout_seconds": intSchema(description: "Upload timeout in seconds for the plugin-routed command.", defaultValue: 1800),
+                    "dry_run": boolSchema(description: "Validate upload inputs without contacting App Store Connect.", defaultValue: false),
+                    "preflight_only": boolSchema(description: "Alias for dry-run upload preflight.", defaultValue: false)
+                ],
+                required: ["api_key_id", "issuer_id"]
+            ),
+            annotations: mutatingAnnotations
+        ),
+        .init(
+            name: "xcode_distribute",
+            description: "Blocked until the full GUI-only Xcode Organizer archive/export/upload workflow is implemented. This tool refuses command-line distribution.",
+            timeoutSeconds: XcodeMCPTimeouts.protocolSafeToolSeconds,
+            inputSchema: objectSchema(
+                properties: [
+                    "workspace_path": stringSchema(description: "Path to .xcworkspace or .xcodeproj."),
+                    "scheme": stringSchema(description: "Scheme to archive and distribute."),
+                    "export_method": stringSchema(description: "Export method, such as app-store-connect."),
+                    "destination_channel": enumStringSchema(description: "Distribution destination.", values: ["testflight", "app-store-connect"], defaultValue: "testflight", examples: ["testflight"]),
+                    "team_id": stringSchema(description: "Apple Developer Team ID. Redacted from output."),
+                    "credentials_ref": freeFormObjectSchema(description: "Credential reference object with provider, api_key_id, issuer_id, and api_key_path or api_key_env. Secret values are redacted."),
+                    "configuration": stringSchema(description: "Build configuration.", defaultValue: "Release"),
+                    "destination": stringSchema(description: "Archive destination.", defaultValue: "generic/platform=iOS"),
+                    "archive_path": stringSchema(description: "Optional output .xcarchive path."),
+                    "export_path": stringSchema(description: "Optional IPA export directory."),
+                    "signing_style": enumStringSchema(description: "Export signing style.", values: ["automatic", "manual"], defaultValue: "automatic", examples: ["automatic"]),
+                    "timeout_seconds": intSchema(description: "End-to-end timeout in seconds for each plugin-routed step.", defaultValue: 5400),
+                    "dry_run": boolSchema(description: "Run guarded preflight and return the plan without archive, export, or upload.", defaultValue: false),
+                    "preflight_only": boolSchema(description: "Run guarded preflight and stop before archive/export/upload.", defaultValue: false)
+                ],
+                required: ["workspace_path", "scheme", "export_method", "destination_channel", "team_id", "credentials_ref"]
             ),
             annotations: mutatingAnnotations
         ),
@@ -344,6 +558,17 @@ enum XcodeToolCatalog {
         ]
         if !required.isEmpty {
             object["required"] = .array(required.map { .string($0) })
+        }
+        return .object(object)
+    }
+
+    private static func freeFormObjectSchema(description: String? = nil) -> Value {
+        var object: [String: Value] = [
+            "type": .string("object"),
+            "additionalProperties": .bool(true)
+        ]
+        if let description {
+            object["description"] = .string(description)
         }
         return .object(object)
     }

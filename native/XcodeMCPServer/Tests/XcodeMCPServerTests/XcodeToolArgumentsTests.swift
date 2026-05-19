@@ -18,11 +18,25 @@ final class XcodeToolArgumentsTests: XCTestCase {
             "xcode_ide_list_destinations",
             "xcode_ide_menu_catalog",
             "xcode_ide_menu_perform",
+            "xcode_organizer_open",
+            "xcode_organizer_inspect",
+            "xcode_organizer_press",
+            "xcode_organizer_distribution_inspect",
+            "xcode_organizer_distribution_select_method",
+            "xcode_organizer_distribution_confirm",
+            "xcode_organizer_distribution_step_inspect",
+            "xcode_organizer_distribution_probe_method",
+            "xcode_organizer_distribution_select_custom_route",
+            "xcode_organizer_distribution_probe_custom_route",
             "xcode_ide_preflight",
             "xcode_ide_build",
             "xcode_ide_test",
             "xcode_ide_run",
             "xcode_run_app",
+            "xcode_archive",
+            "xcode_export_archive",
+            "xcode_upload_archive",
+            "xcode_distribute",
             "xcode_simulator_resolve",
             "xcode_results_summary",
             "xcode_warnings_summary",
@@ -160,6 +174,161 @@ final class XcodeToolArgumentsTests: XCTestCase {
             try XcodeToolArguments.argv(for: "xcode_help", arguments: [:]),
             ["help", "--topic", "ide-vs-cli", "--json"]
         )
+    }
+
+    func testOrganizerToolMappings() throws {
+        XCTAssertEqual(
+            try XcodeToolArguments.argv(for: "xcode_organizer_open", arguments: [:]),
+            ["ide", "organizer-open", "--json"]
+        )
+        XCTAssertEqual(
+            try XcodeToolArguments.argv(for: "xcode_organizer_inspect", arguments: ["window_title_contains": .string("Organizer"), "max_depth": .int(5)]),
+            ["ide", "organizer-inspect", "--window-title-contains", "Organizer", "--max-depth", "5", "--json"]
+        )
+        XCTAssertEqual(
+            try XcodeToolArguments.argv(for: "xcode_organizer_press", arguments: ["button_title": .string("Distribute App")]),
+            ["ide", "organizer-press", "--button-title", "Distribute App", "--json"]
+        )
+        XCTAssertEqual(
+            try XcodeToolArguments.argv(for: "xcode_organizer_distribution_inspect", arguments: [:]),
+            ["ide", "organizer-distribution-inspect", "--json"]
+        )
+        XCTAssertEqual(
+            try XcodeToolArguments.argv(for: "xcode_organizer_distribution_select_method", arguments: ["method": .string("App Store Connect")]),
+            ["ide", "organizer-distribution-select", "--method", "App Store Connect", "--json"]
+        )
+        XCTAssertEqual(
+            try XcodeToolArguments.argv(for: "xcode_organizer_distribution_confirm", arguments: ["expected_method": .string("App Store Connect")]),
+            ["ide", "organizer-distribution-confirm", "--expected-method", "App Store Connect", "--json"]
+        )
+        XCTAssertEqual(
+            try XcodeToolArguments.argv(for: "xcode_organizer_distribution_step_inspect", arguments: [:]),
+            ["ide", "organizer-distribution-step-inspect", "--json"]
+        )
+        XCTAssertEqual(
+            try XcodeToolArguments.argv(for: "xcode_organizer_distribution_probe_method", arguments: ["method": .string("Enterprise")]),
+            ["ide", "organizer-distribution-probe-method", "--method", "Enterprise", "--json"]
+        )
+        XCTAssertEqual(
+            try XcodeToolArguments.argv(
+                for: "xcode_organizer_distribution_probe_method",
+                arguments: ["method": .string("Custom"), "cancel_after_inspect": .bool(false), "settle_seconds": .int(2), "wait_ready_seconds": .int(3), "max_safe_steps": .int(5), "option_overrides": .object(["custom_destination": .string("export")])]
+            ),
+            ["ide", "organizer-distribution-probe-method", "--method", "Custom", "--no-cancel-after-inspect", "--settle-seconds", "2", "--wait-ready-seconds", "3", "--max-safe-steps", "5", "--option-overrides", "{\"custom_destination\":\"export\"}", "--json"]
+        )
+        XCTAssertEqual(
+            try XcodeToolArguments.argv(for: "xcode_organizer_distribution_select_custom_route", arguments: ["route": .string("Release Testing")]),
+            ["ide", "organizer-distribution-custom-select", "--route", "Release Testing", "--json"]
+        )
+        XCTAssertEqual(
+            try XcodeToolArguments.argv(
+                for: "xcode_organizer_distribution_probe_custom_route",
+                arguments: ["route": .string("Debugging"), "cancel_after_inspect": .bool(false), "settle_seconds": .int(2), "wait_ready_seconds": .int(4), "max_safe_steps": .int(6), "option_overrides": .object(["strip_swift_symbols": .bool(false), "include_manifest": .bool(true)])]
+            ),
+            ["ide", "organizer-distribution-probe-custom-route", "--route", "Debugging", "--no-cancel-after-inspect", "--settle-seconds", "2", "--wait-ready-seconds", "4", "--max-safe-steps", "6", "--option-overrides", "{\"include_manifest\":true,\"strip_swift_symbols\":false}", "--json"]
+        )
+    }
+
+    func testDistributionToolMappings() throws {
+        XCTAssertEqual(
+            try XcodeToolArguments.argv(
+                for: "xcode_archive",
+                arguments: [
+                    "workspace_path": .string("/tmp/App.xcworkspace"),
+                    "scheme": .string("App"),
+                    "archive_path": .string("/tmp/App.xcarchive"),
+                    "dry_run": .bool(true)
+                ]
+            ),
+            [
+                "distribution", "archive",
+                "--workspace-path", "/tmp/App.xcworkspace",
+                "--scheme", "App",
+                "--configuration", "Release",
+                "--destination", "generic/platform=iOS",
+                "--timeout-seconds", "3600",
+                "--archive-path", "/tmp/App.xcarchive",
+                "--dry-run",
+                "--json"
+            ]
+        )
+
+        XCTAssertEqual(
+            try XcodeToolArguments.argv(
+                for: "xcode_export_archive",
+                arguments: [
+                    "archive_path": .string("/tmp/App.xcarchive"),
+                    "export_method": .string("app-store-connect"),
+                    "team_id": .string("ABCDE12345"),
+                    "export_path": .string("/tmp/export"),
+                    "export_options": .object(["stripSwiftSymbols": .bool(true)])
+                ]
+            ),
+            [
+                "distribution", "export-archive",
+                "--archive-path", "/tmp/App.xcarchive",
+                "--export-method", "app-store-connect",
+                "--export-path", "/tmp/export",
+                "--timeout-seconds", "1800",
+                "--team-id", "ABCDE12345",
+                "--export-options", "{\"stripSwiftSymbols\":true}",
+                "--json"
+            ]
+        )
+
+        XCTAssertEqual(
+            try XcodeToolArguments.argv(
+                for: "xcode_upload_archive",
+                arguments: [
+                    "ipa_path": .string("/tmp/App.ipa"),
+                    "api_key_id": .string("KEY123"),
+                    "issuer_id": .string("ISSUER123"),
+                    "api_key_env": .string("ASC_KEY_PATH"),
+                    "preflight_only": .bool(true)
+                ]
+            ),
+            [
+                "distribution", "upload-archive",
+                "--timeout-seconds", "1800",
+                "--ipa-path", "/tmp/App.ipa",
+                "--api-key-id", "KEY123",
+                "--issuer-id", "ISSUER123",
+                "--api-key-env", "ASC_KEY_PATH",
+                "--preflight-only",
+                "--json"
+            ]
+        )
+    }
+
+    func testDistributeAcceptsCredentialsObject() throws {
+        let argv = try XcodeToolArguments.argv(
+            for: "xcode_distribute",
+            arguments: [
+                "workspace_path": .string("/tmp/App.xcworkspace"),
+                "scheme": .string("App"),
+                "export_method": .string("app-store-connect"),
+                "destination_channel": .string("testflight"),
+                "team_id": .string("ABCDE12345"),
+                "credentials_ref": .object([
+                    "api_key_id": .string("KEY123"),
+                    "issuer_id": .string("ISSUER123"),
+                    "api_key_env": .string("ASC_KEY_PATH")
+                ]),
+                "dry_run": .bool(true)
+            ]
+        )
+
+        XCTAssertEqual(argv.prefix(12), [
+            "distribution", "distribute",
+            "--workspace-path", "/tmp/App.xcworkspace",
+            "--scheme", "App",
+            "--export-method", "app-store-connect",
+            "--destination-channel", "testflight",
+            "--team-id", "ABCDE12345"
+        ])
+        XCTAssertTrue(argv.contains("--credentials-ref"))
+        XCTAssertTrue(argv.contains("{\"api_key_env\":\"ASC_KEY_PATH\",\"api_key_id\":\"KEY123\",\"issuer_id\":\"ISSUER123\"}"))
+        XCTAssertTrue(argv.contains("--dry-run"))
     }
 
     func testMissingRequiredIdeTestArgumentsThrowsUsage() {

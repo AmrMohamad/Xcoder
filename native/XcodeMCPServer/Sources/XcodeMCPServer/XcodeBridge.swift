@@ -56,8 +56,8 @@ actor XcodeBridge {
                 summary: "bin/xcode returned exit code \(result.exitCode)",
                 details: [
                     "exit_code": result.exitCode,
-                    "stderr": JSONEnvelope.compactText(result.stderr),
-                    "stdout": JSONEnvelope.compactText(result.stdout)
+                    "stderr": JSONEnvelope.compactRedactedText(result.stderr),
+                    "stdout": JSONEnvelope.compactRedactedText(result.stdout)
                 ]
             ), isError: true)
         }
@@ -67,8 +67,8 @@ actor XcodeBridge {
                 errorType: "subprocess_failed",
                 summary: "bin/xcode did not return valid JSON",
                 details: [
-                    "stderr": JSONEnvelope.compactText(result.stderr),
-                    "stdout": JSONEnvelope.compactText(result.stdout)
+                    "stderr": JSONEnvelope.compactRedactedText(result.stderr),
+                    "stdout": JSONEnvelope.compactRedactedText(result.stdout)
                 ]
             ), isError: true)
         }
@@ -93,14 +93,15 @@ actor XcodeBridge {
                 "Use the equivalent bin/xcode CLI path when the operation is expected to exceed the MCP call budget."
             ]
         }
+        let redactedArgv = JSONEnvelope.redactedArguments(argv)
         return XcodeBridgeResult(json: JSONEnvelope.failure(
             errorType: "command_timeout",
             summary: summary,
             details: [
                 "tool_name": tool.name,
                 "mcp_tool_timeout_seconds": tool.timeoutSeconds,
-                "argv": argv,
-                "argv_summary": argv.joined(separator: " ")
+                "argv": redactedArgv,
+                "argv_summary": redactedArgv.joined(separator: " ")
             ],
             nextActions: nextActions
         ), isError: false)

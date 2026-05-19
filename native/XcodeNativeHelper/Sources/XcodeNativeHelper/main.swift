@@ -216,6 +216,12 @@ func boolAttribute(_ element: AXUIElement, _ attribute: String) -> Bool {
     return value as? Bool ?? false
 }
 
+func optionalBoolAttribute(_ element: AXUIElement, _ attribute: String) -> Bool? {
+    let (value, error) = copyAttribute(element, attribute)
+    guard error == .success else { return nil }
+    return value as? Bool
+}
+
 func axValuePair(_ element: AXUIElement, _ attribute: String) -> [String: Double]? {
     let (value, error) = copyAttribute(element, attribute)
     guard error == .success, let rawValue = value else { return nil }
@@ -242,10 +248,509 @@ func optionalStringAttribute(_ element: AXUIElement, _ attribute: String) -> Str
     return value.isEmpty ? nil : value
 }
 
+func stringValue(_ value: Any?) -> String {
+    guard let value else { return "" }
+    if let string = value as? String {
+        return string
+    }
+    if let number = value as? NSNumber {
+        return number.stringValue
+    }
+    return String(describing: value)
+}
+
 func elementArrayAttribute(_ element: AXUIElement, _ attribute: String) -> [AXUIElement] {
     let (value, error) = copyAttribute(element, attribute)
     guard error == .success else { return [] }
     return value as? [AXUIElement] ?? []
+}
+
+func elementAttribute(_ element: AXUIElement, _ attribute: String) -> AXUIElement? {
+    let (value, error) = copyAttribute(element, attribute)
+    guard error == .success else { return nil }
+    guard let value else { return nil }
+    if CFGetTypeID(value as CFTypeRef) == AXUIElementGetTypeID() {
+        return (value as! AXUIElement)
+    }
+    return nil
+}
+
+func axErrorName(_ error: AXError) -> String {
+    switch error {
+    case .success: return "success"
+    case .failure: return "failure"
+    case .illegalArgument: return "illegalArgument"
+    case .invalidUIElement: return "invalidUIElement"
+    case .invalidUIElementObserver: return "invalidUIElementObserver"
+    case .cannotComplete: return "cannotComplete"
+    case .attributeUnsupported: return "attributeUnsupported"
+    case .actionUnsupported: return "actionUnsupported"
+    case .notificationUnsupported: return "notificationUnsupported"
+    case .notImplemented: return "notImplemented"
+    case .notificationAlreadyRegistered: return "notificationAlreadyRegistered"
+    case .notificationNotRegistered: return "notificationNotRegistered"
+    case .apiDisabled: return "apiDisabled"
+    case .noValue: return "noValue"
+    case .parameterizedAttributeUnsupported: return "parameterizedAttributeUnsupported"
+    case .notEnoughPrecision: return "notEnoughPrecision"
+    @unknown default: return "unknown"
+    }
+}
+
+func pressAX(_ element: AXUIElement) -> AXError {
+    AXUIElementPerformAction(element, kAXPressAction as CFString)
+}
+
+func argumentValue(_ args: [String], flag: String) -> String? {
+    guard let index = args.firstIndex(of: flag), args.indices.contains(index + 1) else {
+        return nil
+    }
+    return args[index + 1]
+}
+
+func intArgumentValue(_ args: [String], flag: String, default defaultValue: Int) -> Int {
+    guard let raw = argumentValue(args, flag: flag), let value = Int(raw) else {
+        return defaultValue
+    }
+    return value
+}
+
+func menuChild(named title: String, in element: AXUIElement) -> AXUIElement? {
+    for child in elementArrayAttribute(element, kAXChildrenAttribute as String) {
+        if stringAttribute(child, kAXTitleAttribute as String) == title {
+            return child
+        }
+    }
+    return nil
+}
+
+func menuContainer(for item: AXUIElement) -> AXUIElement? {
+    if let menu = elementAttribute(item, "AXMenu") {
+        return menu
+    }
+    for child in elementArrayAttribute(item, kAXChildrenAttribute as String) {
+        if stringAttribute(child, kAXRoleAttribute as String) == "AXMenu" {
+            return child
+        }
+    }
+    return nil
+}
+
+func parseMenuPath(from args: [String]) -> [String]? {
+    guard let index = args.firstIndex(of: "--menu-path-json"), args.indices.contains(index + 1) else {
+        return nil
+    }
+    guard let data = args[index + 1].data(using: .utf8),
+          let value = try? JSONSerialization.jsonObject(with: data) as? [String],
+          value.count >= 2
+    else {
+        return nil
+    }
+    return value
+}
+
+func pressXcodeMenu(path: [String]) -> Never {
+    guard accessibilityTrusted(prompt: false) else {
+        NativeResponse.emit(
+            ok: false,
+            commandName: "ax.press-menu",
+            summary: "Accessibility permission is not granted for XcodeNativeHelper.app",
+            errorType: "accessibility_not_trusted",
+            nextActions: ["Approve XcodeNativeHelper.app in System Settings > Privacy & Security > Accessibility."],
+            exitCode: 4
+        )
+    }
+    let apps = xcodeApplications()
+    guard let app = apps.first(where: { $0.isActive }) ?? apps.first else {
+        NativeResponse.emit(
+            ok: false,
+            commandName: "ax.press-menu",
+            summary: "Xcode is not running",
+            errorType: "xcode_not_running",
+            exitCode: 10
+        )
+    }
+    _ = app.activate(options: [.activateIgnoringOtherApps])
+    Thread.sleep(forTimeInterval: 0.2)
+
+    let appElement = AXUIElementCreateApplication(app.processIdentifier)
+    guard let menuBar = elementAttribute(appElement, kAXMenuBarAttribute as String) else {
+        NativeResponse.emit(
+            ok: false,
+            commandName: "ax.press-menu",
+            summary: "Xcode menu bar was not accessible",
+            errorType: "xcode_menu_item_not_found",
+            exitCode: 28
+        )
+    }
+    guard let root = menuChild(named: path[0], in: menuBar) else {
+        NativeResponse.emit(
+            ok: false,
+            commandName: "ax.press-menu",
+            summary: "Xcode menu bar item was not found",
+            errorType: "xcode_menu_item_not_found",
+            errors: [["menu_path": path]],
+            exitCode: 28
+        )
+    }
+    var pressError = pressAX(root)
+    if pressError != .success && pressError != .actionUnsupported {
+        NativeResponse.emit(
+            ok: false,
+            commandName: "ax.press-menu",
+            summary: "Xcode menu bar item could not be opened",
+            errorType: "xcode_menu_item_not_found",
+            errors: [["menu_path": path, "ax_error": axErrorName(pressError)]],
+            exitCode: 28
+        )
+    }
+    Thread.sleep(forTimeInterval: 0.2)
+
+    var container: AXUIElement? = menuContainer(for: root)
+    var target: AXUIElement?
+    for (index, label) in path.dropFirst().enumerated() {
+        guard let currentContainer = container, let item = menuChild(named: label, in: currentContainer) else {
+            NativeResponse.emit(
+                ok: false,
+                commandName: "ax.press-menu",
+                summary: "Xcode menu item was not found",
+                errorType: "xcode_menu_item_not_found",
+                errors: [["menu_path": path, "missing_label": label]],
+                exitCode: 28
+            )
+        }
+        target = item
+        if index < path.dropFirst().count - 1 {
+            pressError = pressAX(item)
+            if pressError != .success && pressError != .actionUnsupported {
+                NativeResponse.emit(
+                    ok: false,
+                    commandName: "ax.press-menu",
+                    summary: "Xcode submenu could not be opened",
+                    errorType: "xcode_menu_item_not_found",
+                    errors: [["menu_path": path, "label": label, "ax_error": axErrorName(pressError)]],
+                    exitCode: 28
+                )
+            }
+            Thread.sleep(forTimeInterval: 0.2)
+            container = menuContainer(for: item)
+        }
+    }
+    guard let target else {
+        NativeResponse.emit(
+            ok: false,
+            commandName: "ax.press-menu",
+            summary: "Xcode menu item was not resolved",
+            errorType: "xcode_menu_item_not_found",
+            errors: [["menu_path": path]],
+            exitCode: 28
+        )
+    }
+    let enabled = boolAttribute(target, kAXEnabledAttribute as String)
+    guard enabled else {
+        NativeResponse.emit(
+            ok: false,
+            commandName: "ax.press-menu",
+            summary: "Xcode menu item is disabled",
+            errorType: "xcode_menu_item_disabled",
+            errors: [["menu_path": path]],
+            exitCode: 29
+        )
+    }
+    pressError = pressAX(target)
+    guard pressError == .success else {
+        NativeResponse.emit(
+            ok: false,
+            commandName: "ax.press-menu",
+            summary: "Xcode menu item press failed",
+            errorType: "xcode_ide_automation_failed",
+            errors: [["menu_path": path, "ax_error": axErrorName(pressError)]],
+            exitCode: 11
+        )
+    }
+    NativeResponse.emit(
+        ok: true,
+        commandName: "ax.press-menu",
+        summary: [
+            "menu_path": path,
+            "menu_path_text": path.joined(separator: " > "),
+            "performed": true,
+            "enabled_before_press": enabled,
+            "xcode": appSummary(app)
+        ]
+    )
+}
+
+func xcodeAppElement() -> (NSRunningApplication, AXUIElement)? {
+    let apps = xcodeApplications()
+    guard let app = apps.first(where: { $0.isActive }) ?? apps.first else {
+        return nil
+    }
+    return (app, AXUIElementCreateApplication(app.processIdentifier))
+}
+
+func windowsForXcode() -> (NSRunningApplication, [AXUIElement])? {
+    guard let (app, appElement) = xcodeAppElement() else {
+        return nil
+    }
+    return (app, elementArrayAttribute(appElement, kAXWindowsAttribute as String))
+}
+
+func windowMatches(_ window: AXUIElement, titleContains: String?) -> Bool {
+    guard let titleContains, !titleContains.isEmpty else {
+        return true
+    }
+    let title = stringAttribute(window, kAXTitleAttribute as String)
+    let identifier = stringAttribute(window, kAXIdentifierAttribute as String)
+    return title.localizedCaseInsensitiveContains(titleContains)
+        || identifier.localizedCaseInsensitiveContains(titleContains)
+}
+
+func axElementSummary(_ element: AXUIElement, depth: Int, maxDepth: Int, maxChildren: Int) -> [String: Any] {
+    let (rawValue, _) = copyAttribute(element, kAXValueAttribute as String)
+    let children = elementArrayAttribute(element, kAXChildrenAttribute as String)
+    var item: [String: Any] = [
+        "role": stringAttribute(element, kAXRoleAttribute as String),
+        "subrole": stringAttribute(element, kAXSubroleAttribute as String),
+        "title": stringAttribute(element, kAXTitleAttribute as String),
+        "description": stringAttribute(element, kAXDescriptionAttribute as String),
+        "value": stringValue(rawValue),
+        "enabled": boolAttribute(element, kAXEnabledAttribute as String),
+        "child_count": children.count
+    ]
+    if let identifier = optionalStringAttribute(element, kAXIdentifierAttribute as String) {
+        item["identifier"] = identifier
+    }
+    if let selected = optionalBoolAttribute(element, kAXSelectedAttribute as String) {
+        item["selected"] = selected
+    }
+    if depth < maxDepth {
+        item["children"] = children.prefix(maxChildren).map {
+            axElementSummary($0, depth: depth + 1, maxDepth: maxDepth, maxChildren: maxChildren)
+        }
+    }
+    return item
+}
+
+func collectMatchingElements(
+    _ element: AXUIElement,
+    title: String?,
+    role: String?,
+    maxDepth: Int,
+    depth: Int = 0,
+    matches: inout [[String: Any]],
+    elements: inout [AXUIElement]
+) {
+    let elementTitle = stringAttribute(element, kAXTitleAttribute as String)
+    let elementDescription = stringAttribute(element, kAXDescriptionAttribute as String)
+    let elementRole = stringAttribute(element, kAXRoleAttribute as String)
+    let titleMatches = title == nil
+        || elementTitle.localizedCaseInsensitiveCompare(title!) == .orderedSame
+        || elementDescription.localizedCaseInsensitiveCompare(title!) == .orderedSame
+    let roleMatches = role == nil || elementRole == role
+    if titleMatches && roleMatches {
+        matches.append(axElementSummary(element, depth: 0, maxDepth: 0, maxChildren: 0))
+        elements.append(element)
+    }
+    guard depth < maxDepth else {
+        return
+    }
+    for child in elementArrayAttribute(element, kAXChildrenAttribute as String) {
+        collectMatchingElements(child, title: title, role: role, maxDepth: maxDepth, depth: depth + 1, matches: &matches, elements: &elements)
+    }
+}
+
+func inspectXcodeAX(args: [String]) -> Never {
+    guard accessibilityTrusted(prompt: false) else {
+        NativeResponse.emit(
+            ok: false,
+            commandName: "ax.inspect",
+            summary: "Accessibility permission is not granted for XcodeNativeHelper.app",
+            errorType: "accessibility_not_trusted",
+            nextActions: ["Approve XcodeNativeHelper.app in System Settings > Privacy & Security > Accessibility."],
+            exitCode: 4
+        )
+    }
+    guard let (app, windows) = windowsForXcode() else {
+        NativeResponse.emit(ok: false, commandName: "ax.inspect", summary: "Xcode is not running", errorType: "xcode_not_running", exitCode: 10)
+    }
+    let titleContains = argumentValue(args, flag: "--window-title-contains")
+    let maxDepth = intArgumentValue(args, flag: "--max-depth", default: 3)
+    let maxChildren = intArgumentValue(args, flag: "--max-children", default: 80)
+    let selectedWindows = windows.enumerated().filter { windowMatches($0.element, titleContains: titleContains) }
+    NativeResponse.emit(
+        ok: true,
+        commandName: "ax.inspect",
+        summary: [
+            "xcode": appSummary(app),
+            "window_filter": titleContains ?? "",
+            "window_count": selectedWindows.count,
+            "windows": selectedWindows.map { item in
+                var summary = windowSummary(item.element, index: item.offset)
+                summary["tree"] = axElementSummary(item.element, depth: 0, maxDepth: maxDepth, maxChildren: maxChildren)
+                return summary
+            }
+        ]
+    )
+}
+
+func pressXcodeButton(args: [String]) -> Never {
+    guard accessibilityTrusted(prompt: false) else {
+        NativeResponse.emit(
+            ok: false,
+            commandName: "ax.press-button",
+            summary: "Accessibility permission is not granted for XcodeNativeHelper.app",
+            errorType: "accessibility_not_trusted",
+            nextActions: ["Approve XcodeNativeHelper.app in System Settings > Privacy & Security > Accessibility."],
+            exitCode: 4
+        )
+    }
+    guard let title = argumentValue(args, flag: "--title"), !title.isEmpty else {
+        usage()
+    }
+    guard let (app, windows) = windowsForXcode() else {
+        NativeResponse.emit(ok: false, commandName: "ax.press-button", summary: "Xcode is not running", errorType: "xcode_not_running", exitCode: 10)
+    }
+    let titleContains = argumentValue(args, flag: "--window-title-contains")
+    let selectedWindows = windows.enumerated().filter { windowMatches($0.element, titleContains: titleContains) }
+    var matches: [[String: Any]] = []
+    var elements: [AXUIElement] = []
+    for item in selectedWindows {
+        collectMatchingElements(item.element, title: title, role: "AXButton", maxDepth: 10, matches: &matches, elements: &elements)
+    }
+    guard elements.count == 1, let target = elements.first else {
+        NativeResponse.emit(
+            ok: false,
+            commandName: "ax.press-button",
+            summary: elements.isEmpty ? "Xcode button was not found" : "Xcode button match is ambiguous",
+            errorType: elements.isEmpty ? "xcode_menu_item_not_found" : "destination_ambiguous",
+            errors: [["title": title, "window_filter": titleContains ?? "", "matches": matches]],
+            exitCode: elements.isEmpty ? 28 : 17
+        )
+    }
+    let enabled = boolAttribute(target, kAXEnabledAttribute as String)
+    guard enabled else {
+        NativeResponse.emit(
+            ok: false,
+            commandName: "ax.press-button",
+            summary: "Xcode button is disabled",
+            errorType: "xcode_menu_item_disabled",
+            errors: [["title": title, "matches": matches]],
+            exitCode: 29
+        )
+    }
+    let error = pressAX(target)
+    guard error == .success else {
+        NativeResponse.emit(
+            ok: false,
+            commandName: "ax.press-button",
+            summary: "Xcode button press failed",
+            errorType: "xcode_ide_automation_failed",
+            errors: [["title": title, "ax_error": axErrorName(error)]],
+            exitCode: 11
+        )
+    }
+    NativeResponse.emit(
+        ok: true,
+        commandName: "ax.press-button",
+        summary: [
+            "title": title,
+            "performed": true,
+            "enabled_before_press": enabled,
+            "window_filter": titleContains ?? "",
+            "match": matches.first ?? [:],
+            "xcode": appSummary(app)
+        ]
+    )
+}
+
+func pressXcodeControl(args: [String]) -> Never {
+    guard accessibilityTrusted(prompt: false) else {
+        NativeResponse.emit(
+            ok: false,
+            commandName: "ax.press-control",
+            summary: "Accessibility permission is not granted for XcodeNativeHelper.app",
+            errorType: "accessibility_not_trusted",
+            nextActions: ["Approve XcodeNativeHelper.app in System Settings > Privacy & Security > Accessibility."],
+            exitCode: 4
+        )
+    }
+    guard let title = argumentValue(args, flag: "--title"), !title.isEmpty else {
+        usage()
+    }
+    guard let role = argumentValue(args, flag: "--role"), !role.isEmpty else {
+        usage()
+    }
+    let allowedRoles = Set(["AXRadioButton", "AXCheckBox", "AXPopUpButton"])
+    guard allowedRoles.contains(role) else {
+        NativeResponse.emit(
+            ok: false,
+            commandName: "ax.press-control",
+            summary: "Unsupported AX control role",
+            errorType: "usage_error",
+            errors: [["role": role, "allowed_roles": Array(allowedRoles).sorted()]],
+            exitCode: 2
+        )
+    }
+    guard let (app, windows) = windowsForXcode() else {
+        NativeResponse.emit(ok: false, commandName: "ax.press-control", summary: "Xcode is not running", errorType: "xcode_not_running", exitCode: 10)
+    }
+    let titleContains = argumentValue(args, flag: "--window-title-contains")
+    let selectedWindows = windows.enumerated().filter { windowMatches($0.element, titleContains: titleContains) }
+    var matches: [[String: Any]] = []
+    var elements: [AXUIElement] = []
+    for item in selectedWindows {
+        collectMatchingElements(item.element, title: title, role: role, maxDepth: 10, matches: &matches, elements: &elements)
+    }
+    guard elements.count == 1, let target = elements.first else {
+        NativeResponse.emit(
+            ok: false,
+            commandName: "ax.press-control",
+            summary: elements.isEmpty ? "Xcode control was not found" : "Xcode control match is ambiguous",
+            errorType: elements.isEmpty ? "xcode_menu_item_not_found" : "destination_ambiguous",
+            errors: [["title": title, "role": role, "window_filter": titleContains ?? "", "matches": matches]],
+            exitCode: elements.isEmpty ? 28 : 17
+        )
+    }
+    let enabled = boolAttribute(target, kAXEnabledAttribute as String)
+    let selectedBeforePress = optionalBoolAttribute(target, kAXSelectedAttribute as String)
+    let (rawValueBeforePress, _) = copyAttribute(target, kAXValueAttribute as String)
+    guard enabled else {
+        NativeResponse.emit(
+            ok: false,
+            commandName: "ax.press-control",
+            summary: "Xcode control is disabled",
+            errorType: "xcode_menu_item_disabled",
+            errors: [["title": title, "role": role, "matches": matches]],
+            exitCode: 29
+        )
+    }
+    let error = pressAX(target)
+    guard error == .success else {
+        NativeResponse.emit(
+            ok: false,
+            commandName: "ax.press-control",
+            summary: "Xcode control press failed",
+            errorType: "xcode_ide_automation_failed",
+            errors: [["title": title, "role": role, "ax_error": axErrorName(error)]],
+            exitCode: 11
+        )
+    }
+    NativeResponse.emit(
+        ok: true,
+        commandName: "ax.press-control",
+        summary: [
+            "title": title,
+            "role": role,
+            "performed": true,
+            "enabled_before_press": enabled,
+            "selected_before_press": selectedBeforePress as Any,
+            "value_before_press": stringValue(rawValueBeforePress),
+            "window_filter": titleContains ?? "",
+            "match": matches.first ?? [:],
+            "xcode": appSummary(app)
+        ]
+    )
 }
 
 func windowSummary(_ window: AXUIElement, index: Int) -> [String: Any] {
@@ -320,7 +825,7 @@ func usage() -> Never {
         errorType: "usage_error",
         errors: [CommandLine.arguments.dropFirst().joined(separator: " ")],
         nextActions: [
-            "Use helper version, permissions status, permissions request, app xcode-state, app activate-xcode, app open-workspace, or ax xcode-windows."
+            "Use helper version, permissions status, permissions request, app xcode-state, app activate-xcode, app open-workspace, ax xcode-windows, ax press-menu, ax inspect, ax press-button, or ax press-control."
         ],
         exitCode: 2
     )
@@ -482,6 +987,19 @@ func handleApp(_ args: [String]) -> Never {
 }
 
 func handleAX(_ args: [String]) -> Never {
+    if args.first == "press-menu" {
+        guard let path = parseMenuPath(from: args) else { usage() }
+        pressXcodeMenu(path: path)
+    }
+    if args.first == "inspect" {
+        inspectXcodeAX(args: args)
+    }
+    if args.first == "press-button" {
+        pressXcodeButton(args: args)
+    }
+    if args.first == "press-control" {
+        pressXcodeControl(args: args)
+    }
     guard args.first == "xcode-windows" else { usage() }
     guard accessibilityTrusted(prompt: false) else {
         NativeResponse.emit(

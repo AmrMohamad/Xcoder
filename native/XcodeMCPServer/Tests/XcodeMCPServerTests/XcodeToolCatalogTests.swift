@@ -29,6 +29,9 @@ final class XcodeToolCatalogTests: XCTestCase {
             "xcode_ide_list_schemes",
             "xcode_ide_list_destinations",
             "xcode_ide_menu_catalog",
+            "xcode_organizer_inspect",
+            "xcode_organizer_distribution_inspect",
+            "xcode_organizer_distribution_step_inspect",
             "xcode_help",
             "xcode_simulator_resolve",
             "xcode_results_summary",
@@ -42,7 +45,24 @@ final class XcodeToolCatalogTests: XCTestCase {
             XCTAssertEqual(annotations.idempotentHint, true, name)
         }
 
-        let mutatingTools = ["xcode_ide_build", "xcode_ide_test", "xcode_ide_run", "xcode_run_app", "xcode_ide_menu_perform"]
+        let mutatingTools = [
+            "xcode_ide_build",
+            "xcode_ide_test",
+            "xcode_ide_run",
+            "xcode_run_app",
+            "xcode_archive",
+            "xcode_export_archive",
+            "xcode_upload_archive",
+            "xcode_distribute",
+            "xcode_ide_menu_perform",
+            "xcode_organizer_open",
+            "xcode_organizer_press",
+            "xcode_organizer_distribution_select_method",
+            "xcode_organizer_distribution_confirm",
+            "xcode_organizer_distribution_probe_method",
+            "xcode_organizer_distribution_select_custom_route",
+            "xcode_organizer_distribution_probe_custom_route"
+        ]
         for name in mutatingTools {
             let annotations = try! XCTUnwrap(XcodeToolCatalog.byName[name]?.annotations)
             XCTAssertEqual(annotations.readOnlyHint, false, name)
@@ -65,6 +85,31 @@ final class XcodeToolCatalogTests: XCTestCase {
 
         let helpSchema = try properties(for: "xcode_help")
         XCTAssertEqual(enumValues(helpSchema["topic"]), XcodeToolCatalog.helpTopics)
+
+        let exportSchema = try properties(for: "xcode_export_archive")
+        XCTAssertEqual(enumValues(exportSchema["signing_style"]), ["automatic", "manual"])
+
+        let distributeSchema = try properties(for: "xcode_distribute")
+        XCTAssertEqual(enumValues(distributeSchema["destination_channel"]), ["testflight", "app-store-connect"])
+
+        let organizerSelectSchema = try properties(for: "xcode_organizer_distribution_select_method")
+        XCTAssertEqual(enumValues(organizerSelectSchema["method"]), ["App Store Connect", "TestFlight Internal Only", "Release Testing", "Enterprise", "Debugging", "Custom"])
+
+        let organizerConfirmSchema = try properties(for: "xcode_organizer_distribution_confirm")
+        XCTAssertEqual(enumValues(organizerConfirmSchema["expected_method"]), ["App Store Connect", "TestFlight Internal Only", "Release Testing", "Enterprise", "Debugging", "Custom"])
+
+        let organizerProbeSchema = try properties(for: "xcode_organizer_distribution_probe_method")
+        XCTAssertEqual(enumValues(organizerProbeSchema["method"]), ["App Store Connect", "TestFlight Internal Only", "Release Testing", "Enterprise", "Debugging", "Custom"])
+        XCTAssertNotNil(organizerProbeSchema["max_safe_steps"])
+        XCTAssertNotNil(organizerProbeSchema["option_overrides"])
+
+        let organizerCustomSelectSchema = try properties(for: "xcode_organizer_distribution_select_custom_route")
+        XCTAssertEqual(enumValues(organizerCustomSelectSchema["route"]), ["App Store Connect", "Release Testing", "Enterprise", "Debugging"])
+
+        let organizerCustomProbeSchema = try properties(for: "xcode_organizer_distribution_probe_custom_route")
+        XCTAssertEqual(enumValues(organizerCustomProbeSchema["route"]), ["App Store Connect", "Release Testing", "Enterprise", "Debugging"])
+        XCTAssertNotNil(organizerCustomProbeSchema["max_safe_steps"])
+        XCTAssertNotNil(organizerCustomProbeSchema["option_overrides"])
     }
 
     func testMenuPerformSchemaIsTyped() throws {
@@ -90,7 +135,7 @@ final class XcodeToolCatalogTests: XCTestCase {
     }
 
     func testLongRunningMCPToolsUseProtocolSafeWrapperTimeout() throws {
-        for name in ["xcode_ide_build", "xcode_ide_test", "xcode_ide_run", "xcode_run_app"] {
+        for name in ["xcode_ide_build", "xcode_ide_test", "xcode_ide_run", "xcode_run_app", "xcode_archive", "xcode_export_archive", "xcode_upload_archive", "xcode_distribute"] {
             let definition = try XCTUnwrap(XcodeToolCatalog.byName[name])
             XCTAssertEqual(definition.timeoutSeconds, XcodeMCPTimeouts.protocolSafeToolSeconds, name)
         }
