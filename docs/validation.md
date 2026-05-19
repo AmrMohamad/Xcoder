@@ -79,7 +79,13 @@ with zipfile.ZipFile(path) as archive:
         or name.endswith(".zip.manifest.json")
     ]
     print("bad_entries", len(bad))
-    for name in ["xcode/0.4.5/bin/xcode", "xcode/0.4.5/bin/xcode-mcp", "xcode/0.4.5/bin/xcode-mcp-server", "xcode/0.4.5/bin/xcode-native-helper"]:
+    for name in [
+        "xcode/0.4.5/bin/xcode",
+        "xcode/0.4.5/bin/xcode-mcp",
+        "xcode/0.4.5/bin/xcode-mcp-server",
+        "xcode/0.4.5/bin/xcode-native-helper",
+        "xcode/0.4.5/bin/XcodeNativeHelper.app/Contents/MacOS/xcode-native-helper",
+    ]:
         info = archive.getinfo(name)
         mode = (info.external_attr >> 16) & 0o777777
         print(name, oct(mode), stat.filemode(mode))
@@ -99,6 +105,7 @@ xcode/0.4.5/bin/xcode 0o100755 -rwxr-xr-x
 xcode/0.4.5/bin/xcode-mcp 0o100755 -rwxr-xr-x
 xcode/0.4.5/bin/xcode-mcp-server 0o100755 -rwxr-xr-x
 xcode/0.4.5/bin/xcode-native-helper 0o100755 -rwxr-xr-x
+xcode/0.4.5/bin/XcodeNativeHelper.app/Contents/MacOS/xcode-native-helper 0o100755 -rwxr-xr-x
 ```
 
 ## Cache Validation

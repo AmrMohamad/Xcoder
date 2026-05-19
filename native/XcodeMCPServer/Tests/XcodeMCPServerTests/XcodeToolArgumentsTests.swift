@@ -7,11 +7,17 @@ final class XcodeToolArgumentsTests: XCTestCase {
         let expected = Set([
             "xcode_doctor",
             "xcode_native_state",
+            "xcode_native_permissions_status",
+            "xcode_native_helper_identity",
+            "xcode_native_helper_bundle",
+            "xcode_native_permissions_request",
             "xcode_native_windows",
             "xcode_ide_status",
             "xcode_ide_workspace_info",
             "xcode_ide_list_schemes",
             "xcode_ide_list_destinations",
+            "xcode_ide_menu_catalog",
+            "xcode_ide_menu_perform",
             "xcode_ide_preflight",
             "xcode_ide_build",
             "xcode_ide_test",
@@ -23,6 +29,25 @@ final class XcodeToolArgumentsTests: XCTestCase {
             "xcode_help"
         ])
         XCTAssertEqual(Set(XcodeToolCatalog.all.map(\.name)), expected)
+    }
+
+    func testNativePermissionToolsMapToExplicitPermissionCommands() throws {
+        XCTAssertEqual(
+            try XcodeToolArguments.argv(for: "xcode_native_permissions_status", arguments: [:]),
+            ["native", "permissions", "status", "--json"]
+        )
+        XCTAssertEqual(
+            try XcodeToolArguments.argv(for: "xcode_native_helper_identity", arguments: [:]),
+            ["native", "helper", "identity", "--json"]
+        )
+        XCTAssertEqual(
+            try XcodeToolArguments.argv(for: "xcode_native_helper_bundle", arguments: [:]),
+            ["native", "helper", "bundle", "--json"]
+        )
+        XCTAssertEqual(
+            try XcodeToolArguments.argv(for: "xcode_native_permissions_request", arguments: [:]),
+            ["native", "permissions", "request", "--json"]
+        )
     }
 
     func testIdeTestMapsToFixedSchemeAction() throws {
@@ -43,7 +68,6 @@ final class XcodeToolArgumentsTests: XCTestCase {
                 "--workspace-path", "/tmp/App.xcodeproj",
                 "--scheme", "AppTests",
                 "--timeout-seconds", "600",
-                "--require-native-preflight",
                 "--destination-id", "SIM-123",
                 "--json"
             ]
@@ -68,11 +92,23 @@ final class XcodeToolArgumentsTests: XCTestCase {
                 "--workspace-path", "/tmp/App.xcodeproj",
                 "--scheme", "App",
                 "--timeout-seconds", "95",
-                "--require-native-preflight",
                 "--destination-name", "iPhone SE (3rd generation)",
                 "--json"
             ]
         )
+    }
+
+    func testIdeActionCanRequireNativePreflightWhenRequested() throws {
+        let argv = try XcodeToolArguments.argv(
+            for: "xcode_ide_build",
+            arguments: [
+                "workspace_path": .string("/tmp/App.xcodeproj"),
+                "scheme": .string("App"),
+                "require_native_preflight": .bool(true)
+            ]
+        )
+
+        XCTAssertTrue(argv.contains("--require-native-preflight"))
     }
 
     func testIdeRunCapsRequestedTimeoutBelowMcpClientLimit() throws {
@@ -101,6 +137,21 @@ final class XcodeToolArgumentsTests: XCTestCase {
         XCTAssertEqual(
             try XcodeToolArguments.argv(for: "xcode_ide_list_destinations", arguments: [:]),
             ["ide", "list-destinations", "--json"]
+        )
+        XCTAssertEqual(
+            try XcodeToolArguments.argv(for: "xcode_ide_menu_catalog", arguments: [:]),
+            ["ide", "menu-catalog", "--json"]
+        )
+        XCTAssertEqual(
+            try XcodeToolArguments.argv(for: "xcode_ide_menu_perform", arguments: ["action_id": .string("view.navigator.project")]),
+            ["ide", "menu-perform", "--action-id", "view.navigator.project", "--json"]
+        )
+        XCTAssertEqual(
+            try XcodeToolArguments.argv(
+                for: "xcode_ide_menu_perform",
+                arguments: ["action_id": .string("debug.console.clear"), "allow_destructive": .bool(true)]
+            ),
+            ["ide", "menu-perform", "--action-id", "debug.console.clear", "--allow-destructive", "--json"]
         )
     }
 

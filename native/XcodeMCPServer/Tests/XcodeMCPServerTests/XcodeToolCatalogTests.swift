@@ -21,11 +21,14 @@ final class XcodeToolCatalogTests: XCTestCase {
         let readOnlyTools = [
             "xcode_doctor",
             "xcode_native_state",
+            "xcode_native_permissions_status",
+            "xcode_native_helper_identity",
             "xcode_native_windows",
             "xcode_ide_status",
             "xcode_ide_workspace_info",
             "xcode_ide_list_schemes",
             "xcode_ide_list_destinations",
+            "xcode_ide_menu_catalog",
             "xcode_help",
             "xcode_simulator_resolve",
             "xcode_results_summary",
@@ -39,12 +42,19 @@ final class XcodeToolCatalogTests: XCTestCase {
             XCTAssertEqual(annotations.idempotentHint, true, name)
         }
 
-        let mutatingTools = ["xcode_ide_build", "xcode_ide_test", "xcode_ide_run", "xcode_run_app"]
+        let mutatingTools = ["xcode_ide_build", "xcode_ide_test", "xcode_ide_run", "xcode_run_app", "xcode_ide_menu_perform"]
         for name in mutatingTools {
             let annotations = try! XCTUnwrap(XcodeToolCatalog.byName[name]?.annotations)
             XCTAssertEqual(annotations.readOnlyHint, false, name)
             XCTAssertEqual(annotations.destructiveHint, true, name)
             XCTAssertEqual(annotations.idempotentHint, false, name)
+        }
+
+        for name in ["xcode_native_permissions_request", "xcode_native_helper_bundle"] {
+            let permissionPrompt = try! XCTUnwrap(XcodeToolCatalog.byName[name]?.annotations)
+            XCTAssertEqual(permissionPrompt.readOnlyHint, false, name)
+            XCTAssertEqual(permissionPrompt.destructiveHint, false, name)
+            XCTAssertEqual(permissionPrompt.idempotentHint, false, name)
         }
     }
 
@@ -55,6 +65,16 @@ final class XcodeToolCatalogTests: XCTestCase {
 
         let helpSchema = try properties(for: "xcode_help")
         XCTAssertEqual(enumValues(helpSchema["topic"]), XcodeToolCatalog.helpTopics)
+    }
+
+    func testMenuPerformSchemaIsTyped() throws {
+        let schema = try properties(for: "xcode_ide_menu_perform")
+        XCTAssertNotNil(schema["action_id"])
+        XCTAssertNotNil(schema["allow_destructive"])
+        XCTAssertNil(schema["command"])
+        XCTAssertNil(schema["script"])
+        XCTAssertNil(schema["raw"])
+        XCTAssertNil(schema["args"])
     }
 
     func testMCPToolsExposeAnnotations() {

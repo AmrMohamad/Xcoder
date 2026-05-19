@@ -19,6 +19,7 @@ When the user explicitly mentions `@xcode`, `xcode@local`, or asks this plugin t
 - If `--workspace-path` is supplied and cannot be matched, do not fall back to the active window.
 - Prefer `--destination-id`; use `--destination-name` only when it resolves to exactly one run destination.
 - Use native preflight when available to detect Xcode process state and blocking windows before IDE mutations.
+- Use typed menu control only through `menu-catalog` and `menu-perform` action ids. Never pass raw menu paths, arbitrary AX selectors, or hand-written UI scripts.
 - Pass `--require-native-preflight` when the command must fail if native preflight is unavailable.
 - IDE action timeouts exit `124` and request `stop`.
 - Do not depend on XcodeBuildMCP.
@@ -57,6 +58,16 @@ bin/xcode ide scheme-action --workspace-path /path/to/App.xcworkspace --action t
 bin/xcode ide scheme-action --workspace-path /path/to/App.xcworkspace --action build --require-native-preflight --timeout-seconds 300 --json
 bin/xcode ide scheme-action --workspace-path /path/to/App.xcworkspace --action stop --json
 ```
+
+Typed Xcode menu actions:
+
+```bash
+bin/xcode ide menu-catalog --json
+bin/xcode ide menu-perform --action-id view.navigator.project --json
+bin/xcode ide menu-perform --action-id debug.console.clear --allow-destructive --json
+```
+
+Prefer direct scheme, destination, build, test, and run commands over menu pressing when a typed command exists.
 
 Diagnose a not-testable scheme:
 

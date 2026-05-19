@@ -79,6 +79,8 @@ bin/xcode-mcp-server --doctor --json
 bin/xcode-mcp-server --health --json
 bin/xcode-mcp-server --list-tools --json
 bin/xcode ide status --json
+bin/xcode ide menu-catalog --json
+bin/xcode ide menu-perform --action-id view.navigator.project --json
 bin/xcode ide preflight --workspace-path /path/to/App.xcodeproj --scheme App --destination-id <UDID> --json
 bin/xcode ide list-workspaces --json
 bin/xcode ide workspace-info --workspace-path /path/to/App.xcodeproj --json
@@ -92,6 +94,8 @@ bin/xcode build --project App.xcodeproj --scheme App --destination 'platform=iOS
 The terminal is still the transport for `bin/xcode`, but explicit plugin invocation should not bypass Xcoder with bare `xcodebuild`, `xcrun simctl`, `simctl`, `xcresulttool`, `osascript`, `open -a Xcode`, or the old `xcode-cli-shared-cache-build` skill.
 
 The MCP server remains a Codex-managed stdio child process, not a daemon. It drains child stdout/stderr while `bin/xcode` runs, cleans up active child processes on shutdown, and publishes lightweight CLI-only health state for diagnostics.
+
+Xcoder includes a typed Xcode menu-control layer for safe UI actions. `bin/xcode ide menu-catalog --json` lists stable `action_id` values, shortcuts, safety classes, and blocked dynamic/external-effect entries. `bin/xcode ide menu-perform --action-id <id> --json` executes only cataloged, implemented actions; it never accepts raw menu paths or arbitrary Accessibility selectors, and destructive actions require an explicit destructive flag.
 
 For v0.4.5 packages:
 
@@ -109,8 +113,8 @@ bin/xcode package audit --zip /tmp/xcode-plugin-0.4.5.zip --json
 - `xcode-warning-audit`: xcodebuild warning and error summaries.
 - `xcode-doctor`: local Xcode/toolchain/plugin checks.
 - `xcode-ide-automation`: AppleScript/JXA control of the open Xcode app for IDE-specific actions.
-- `xcode-native-helper`: optional Swift helper for Xcode process state, installed Xcode discovery, permission status, workspace opening, and read-only AX window/modal inspection.
-- `xcode-mcp-server`: bundled Swift MCP stdio server exposing typed tools that call `bin/xcode`, including IDE status, workspace, scheme, destination, test, and help tools.
+- `xcode-native-helper` / `XcodeNativeHelper.app`: optional Swift helper for Xcode process state, installed Xcode discovery, permission status, workspace opening, and read-only AX window/modal inspection. Accessibility-sensitive commands launch the bundled app through LaunchServices so TCC evaluates the helper bundle rather than Codex's internal parent process.
+- `xcode-mcp-server`: bundled Swift MCP stdio server exposing typed tools that call `bin/xcode`, including IDE status, workspace, scheme, destination, typed menu control, test, and help tools.
 - `xcode-workflows`: GUI-first guidance for choosing IDE, native helper, simulator, results, warnings, doctor, or CLI fallback flows.
 
 ## Contract

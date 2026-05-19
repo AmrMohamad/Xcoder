@@ -16,6 +16,14 @@ enum XcodeToolArguments {
             return argv
         case "xcode_native_state":
             return ["native", "app", "xcode-state", "--json"]
+        case "xcode_native_permissions_status":
+            return ["native", "permissions", "status", "--json"]
+        case "xcode_native_helper_identity":
+            return ["native", "helper", "identity", "--json"]
+        case "xcode_native_helper_bundle":
+            return ["native", "helper", "bundle", "--json"]
+        case "xcode_native_permissions_request":
+            return ["native", "permissions", "request", "--json"]
         case "xcode_native_windows":
             return ["native", "ax", "xcode-windows", "--json"]
         case "xcode_ide_status":
@@ -33,6 +41,15 @@ enum XcodeToolArguments {
         case "xcode_ide_list_destinations":
             var argv = ["ide", "list-destinations"]
             ArgumentValues.appendOptionalString(arguments["workspace_path"], flag: "--workspace-path", to: &argv)
+            argv.append("--json")
+            return argv
+        case "xcode_ide_menu_catalog":
+            return ["ide", "menu-catalog", "--json"]
+        case "xcode_ide_menu_perform":
+            var argv = ["ide", "menu-perform", "--action-id", try ArgumentValues.requiredString(arguments["action_id"], key: "action_id")]
+            if ArgumentValues.bool(arguments["allow_destructive"], default: false) {
+                argv.append("--allow-destructive")
+            }
             argv.append("--json")
             return argv
         case "xcode_ide_preflight":
@@ -115,9 +132,11 @@ enum XcodeToolArguments {
             "--action", action,
             "--workspace-path", try ArgumentValues.requiredString(arguments["workspace_path"], key: "workspace_path"),
             "--scheme", try ArgumentValues.requiredString(arguments["scheme"], key: "scheme"),
-            "--timeout-seconds", String(timeout),
-            "--require-native-preflight"
+            "--timeout-seconds", String(timeout)
         ]
+        if ArgumentValues.bool(arguments["require_native_preflight"], default: false) {
+            argv.append("--require-native-preflight")
+        }
         ArgumentValues.appendOptionalString(arguments["destination_id"], flag: "--destination-id", to: &argv)
         ArgumentValues.appendOptionalString(arguments["destination_name"], flag: "--destination-name", to: &argv)
         argv.append("--json")

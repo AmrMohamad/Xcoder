@@ -11,7 +11,15 @@ import time
 from pathlib import Path
 from typing import Any
 
-from xcode_common import EXIT_CODES, compact_output, emit_failure, emit_success, plugin_root, run_command, normalize_path
+from xcode_common import EXIT_CODES, compact_output, emit_failure, emit_success, native_helper_path as resolve_native_helper_path, plugin_root, run_command, normalize_path
+from xcode_ide_menu_catalog import (
+    DESTRUCTIVE,
+    EXTERNAL_EFFECT,
+    MENU_ACTIONS,
+    MENU_ACTIONS_BY_ID,
+    UNSUPPORTED_DYNAMIC,
+    MenuAction,
+)
 
 
 SCRIPT_TIMEOUT_PADDING = 20
@@ -116,6 +124,8 @@ def classify_osascript_error(result: dict[str, Any]) -> tuple[str, int]:
         "XCODE_PLUGIN_DESTINATION_NOT_FOUND": "destination_not_found",
         "XCODE_PLUGIN_DESTINATION_AMBIGUOUS": "destination_ambiguous",
         "XCODE_PLUGIN_WORKSPACE_PATH_UNREADABLE": "xcode_ide_automation_failed",
+        "XCODE_PLUGIN_MENU_PATH_NOT_FOUND": "xcode_menu_item_not_found",
+        "XCODE_PLUGIN_MENU_ITEM_DISABLED": "xcode_menu_item_disabled",
     }
     for marker, error_type in markers.items():
         if marker in text:
@@ -157,7 +167,7 @@ def finish_from_osascript(
 
 
 def native_helper_path() -> Path:
-    return plugin_root() / "bin" / "xcode-native-helper"
+    return resolve_native_helper_path()
 
 
 def native_preflight(*, require: bool, include_ax: bool) -> tuple[int | None, list[str], dict[str, Any]]:
@@ -165,7 +175,7 @@ def native_preflight(*, require: bool, include_ax: bool) -> tuple[int | None, li
     details: dict[str, Any] = {"helper_path": str(helper), "required": require, "ax_checked": include_ax}
     warnings: list[str] = []
     if not helper.exists() or not helper.is_file() or not (helper.stat().st_mode & 0o111):
-        message = "Native helper is not built at bin/xcode-native-helper."
+        message = "Native helper is not built in bin/XcodeNativeHelper.app or bin/xcode-native-helper."
         if require:
             return (
                 payload(
@@ -173,7 +183,7 @@ def native_preflight(*, require: bool, include_ax: bool) -> tuple[int | None, li
                     "Native helper is required but unavailable",
                     data=details,
                     warnings=[message],
-                    next_actions=["Build native/XcodeNativeHelper and install bin/xcode-native-helper."],
+                    next_actions=["Build native/XcodeNativeHelper, then run bin/xcode native helper bundle --json."],
                     exit_code=EXIT_CODES["native_helper_unavailable"],
                     error_type="native_helper_unavailable",
                 ),
@@ -209,7 +219,7 @@ def native_preflight(*, require: bool, include_ax: bool) -> tuple[int | None, li
     if not include_ax:
         return None, warnings, details
 
-    ax = run_command([str(helper), "ax", "xcode-windows", "--json"], timeout_seconds=20)
+    ax = run_command([str(plugin_root() / "bin" / "xcode"), "native", "ax", "xcode-windows", "--json"], timeout_seconds=25)
     details["ax_exit_code"] = ax["exit_code"]
     try:
         ax_json = json.loads(ax["stdout"])
@@ -221,13 +231,17 @@ def native_preflight(*, require: bool, include_ax: bool) -> tuple[int | None, li
 
     if ax["exit_code"] == EXIT_CODES["permission_denied"]:
         message = "Native helper could not inspect Xcode windows because Accessibility is not trusted."
+        permission_actions = [
+            "Use mcp__xcode__.xcode_native_permissions_request, or run bin/xcode native permissions request --json, then approve XcodeNativeHelper.app in System Settings.",
+            "Retry the IDE command after xcode_native_permissions_status reports accessibility_trusted=true.",
+        ]
         if require:
             return (
                 payload(
                     "failure",
                     message,
                     data=details,
-                    next_actions=["Run bin/xcode native permissions request --json if you want macOS to show the Accessibility prompt."],
+                    next_actions=permission_actions,
                     exit_code=EXIT_CODES["permission_denied"],
                     error_type="permission_denied",
                 ),
@@ -235,10 +249,16 @@ def native_preflight(*, require: bool, include_ax: bool) -> tuple[int | None, li
                 details,
             )
         warnings.append(message)
+        details["permission_recovery"] = permission_actions
         return None, warnings, details
 
     if ax["exit_code"] != 0:
         message = "Native helper AX preflight failed."
+        error_type = "native_helper_failed"
+        if isinstance(ax_json, dict):
+            error_type = str(ax_json.get("error_type") or error_type)
+            if isinstance(ax_json.get("summary"), str):
+                message = str(ax_json["summary"])
         if require:
             return (
                 payload(
@@ -246,8 +266,8 @@ def native_preflight(*, require: bool, include_ax: bool) -> tuple[int | None, li
                     message,
                     data=details,
                     warnings=[compact_output(ax["stderr"] or ax["stdout"])],
-                    exit_code=EXIT_CODES["native_helper_failed"],
-                    error_type="native_helper_failed",
+                    exit_code=EXIT_CODES.get(error_type, EXIT_CODES["native_helper_failed"]),
+                    error_type=error_type,
                 ),
                 warnings,
                 details,
@@ -638,6 +658,109 @@ end tell
     return finish_from_osascript(result, "Xcode run destinations listed", failure_summary="Unable to list Xcode run destinations")
 
 
+def menu_catalog_command() -> int:
+    return payload(
+        "success",
+        "Xcode IDE menu catalog listed",
+        data={
+            "menu_action_count": len(MENU_ACTIONS),
+            "safety_classes": sorted({item.safety for item in MENU_ACTIONS}),
+            "actions": [item.as_dict() for item in MENU_ACTIONS],
+        },
+    )
+
+
+def menu_blocked_response(action_item: MenuAction, reason: str, next_actions: list[str] | None = None) -> int:
+    data = {"action": action_item.as_dict(), "blocked_reason": reason}
+    return payload(
+        "failure",
+        "Xcode menu action is blocked by the typed menu safety policy",
+        data=data,
+        next_actions=next_actions
+        or [
+            "Use xcode_ide_menu_catalog to inspect supported menu actions and safety classes.",
+            "Use the preferred typed Xcoder tool when preferred_tool is present.",
+        ],
+        exit_code=EXIT_CODES["xcode_menu_action_blocked"],
+        error_type="xcode_menu_action_blocked",
+    )
+
+
+def menu_press_script(action_item: MenuAction) -> str:
+    path = list(action_item.menu_path)
+    root = path[0]
+    lines = [
+        f"set actionId to {apple_string(action_item.action_id)}",
+        f"set menuPathText to {apple_string(' > '.join(path))}",
+        'tell application "Xcode" to activate',
+        "delay 0.1",
+        'tell application "System Events"',
+        '    if not (exists process "Xcode") then error "XCODE_PLUGIN_XCODE_NOT_RUNNING"',
+        '    tell process "Xcode"',
+        "        set frontmost to true",
+        f"        if not (exists menu bar item {apple_string(root)} of menu bar 1) then error \"XCODE_PLUGIN_MENU_PATH_NOT_FOUND\"",
+        f"        set currentMenu to menu 1 of menu bar item {apple_string(root)} of menu bar 1",
+    ]
+    for index, label in enumerate(path[1:], start=1):
+        lines.append(f"        if not (exists menu item {apple_string(label)} of currentMenu) then error \"XCODE_PLUGIN_MENU_PATH_NOT_FOUND\"")
+        lines.append(f"        set targetItem to menu item {apple_string(label)} of currentMenu")
+        if index < len(path) - 1:
+            lines.append('        if not (exists menu 1 of targetItem) then error "XCODE_PLUGIN_MENU_PATH_NOT_FOUND"')
+            lines.append("        set currentMenu to menu 1 of targetItem")
+    lines.extend(
+        [
+            "        set itemEnabled to true",
+            "        try",
+            "            set itemEnabled to enabled of targetItem",
+            "        end try",
+            '        if itemEnabled is false then error "XCODE_PLUGIN_MENU_ITEM_DISABLED"',
+            '        perform action "AXPress" of targetItem',
+            '        return "action_id\t" & actionId & linefeed & "menu_path\t" & menuPathText & linefeed & "performed\ttrue" & linefeed & "enabled_before_press\t" & (itemEnabled as text) & linefeed',
+            "    end tell",
+            "end tell",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def menu_perform_command(action_id: str, *, allow_destructive: bool = False) -> int:
+    action_item = MENU_ACTIONS_BY_ID.get(action_id)
+    if action_item is None:
+        return payload(
+            "failure",
+            "Unknown Xcode menu action id",
+            data={"action_id": action_id, "known_action_count": len(MENU_ACTIONS)},
+            next_actions=["Run bin/xcode ide menu-catalog --json and choose an action_id from the catalog."],
+            exit_code=EXIT_CODES["usage_error"],
+            error_type="usage_error",
+        )
+    if action_item.safety in {EXTERNAL_EFFECT, UNSUPPORTED_DYNAMIC}:
+        return menu_blocked_response(action_item, action_item.safety)
+    if not action_item.implemented:
+        next_actions = ["Use xcode_ide_menu_catalog to choose an implemented menu action."]
+        if action_item.preferred_tool:
+            next_actions.insert(0, f"Use {action_item.preferred_tool} for this workflow instead of menu pressing.")
+        return menu_blocked_response(action_item, "not_implemented", next_actions=next_actions)
+    if action_item.safety == DESTRUCTIVE and not allow_destructive:
+        return menu_blocked_response(
+            action_item,
+            "destructive_requires_allow_destructive",
+            next_actions=["Retry with --allow-destructive only when the destructive Xcode UI action is intentional."],
+        )
+
+    preflight_exit, preflight_warnings, preflight_details = native_preflight(require=True, include_ax=True)
+    if preflight_exit is not None:
+        return preflight_exit
+    return finish_from_osascript(
+        result=run_osascript(menu_press_script(action_item), timeout=15),
+        success_summary="Xcode menu action performed",
+        failure_summary="Xcode menu action failed",
+        extra_warnings=preflight_warnings,
+        extra_data={"action": action_item.as_dict(), "native_preflight": preflight_details},
+        next_actions=["Use xcode_ide_status or xcode_native_windows to inspect Xcode after the menu action."],
+    )
+
+
 def set_scheme_command(name: str, workspace_path: str | None = None, *, require_native_preflight: bool = False) -> int:
     preflight_exit, preflight_warnings, preflight_details = native_preflight(require=require_native_preflight, include_ax=True)
     if preflight_exit is not None:
@@ -947,6 +1070,12 @@ def parse_args() -> argparse.Namespace:
     list_destinations = subparsers.add_parser("list-destinations", help="List run destinations in a workspace.")
     list_destinations.add_argument("--workspace-path", default=None)
 
+    subparsers.add_parser("menu-catalog", help="List typed Xcode menu actions supported by the plugin.")
+
+    menu_perform = subparsers.add_parser("menu-perform", help="Perform one typed Xcode menu action by stable action id.")
+    menu_perform.add_argument("--action-id", required=True)
+    menu_perform.add_argument("--allow-destructive", action="store_true")
+
     scheme_parser = subparsers.add_parser("set-scheme", help="Set the active Xcode scheme by exact name.")
     scheme_parser.add_argument("--name", required=True)
     scheme_parser.add_argument("--workspace-path", default=None)
@@ -995,6 +1124,10 @@ def main() -> int:
         return list_schemes_command(args.workspace_path)
     if args.command == "list-destinations":
         return list_destinations_command(args.workspace_path)
+    if args.command == "menu-catalog":
+        return menu_catalog_command()
+    if args.command == "menu-perform":
+        return menu_perform_command(args.action_id, allow_destructive=args.allow_destructive)
     if args.command == "set-scheme":
         return set_scheme_command(args.name, args.workspace_path, require_native_preflight=args.require_native_preflight)
     if args.command == "set-destination":

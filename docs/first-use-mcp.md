@@ -54,6 +54,10 @@ Expected MCP tools:
 ```text
 xcode_doctor
 xcode_native_state
+xcode_native_permissions_status
+xcode_native_helper_identity
+xcode_native_helper_bundle
+xcode_native_permissions_request
 xcode_native_windows
 xcode_ide_status
 xcode_ide_workspace_info

@@ -27,7 +27,7 @@ flowchart LR
     Dispatcher --> Doctor["doctor\ntoolchain checks"]
     Dispatcher --> Workflow["workflow\nrun-app orchestration"]
     Dispatcher --> MCPDev["mcp\nbuild/doctor/list-tools"]
-    Native --> Helper["bin/xcode-native-helper"]
+    Native --> Helper["bin/XcodeNativeHelper.app\nor bin/xcode-native-helper fallback"]
     Helper --> AppKit["Foundation + AppKit"]
     Helper --> AX["ApplicationServices AX\nread-only"]
 ```
@@ -77,11 +77,17 @@ The helper emits `xcode-native-helper.v0.1`. The Python adapter normalizes that 
 ```text
 xcode_doctor
 xcode_native_state
+xcode_native_permissions_status
+xcode_native_helper_identity
+xcode_native_helper_bundle
+xcode_native_permissions_request
 xcode_native_windows
 xcode_ide_status
 xcode_ide_workspace_info
 xcode_ide_list_schemes
 xcode_ide_list_destinations
+xcode_ide_menu_catalog
+xcode_ide_menu_perform
 xcode_ide_preflight
 xcode_ide_build
 xcode_ide_test
@@ -93,7 +99,9 @@ xcode_warnings_summary
 xcode_help
 ```
 
-The server is intentionally thin. It validates typed arguments, rejects free-form execution keys such as `command`, `shell`, `args`, `script`, and `raw`, runs `bin/xcode` through `Process` direct argv, enforces MCP-side timeouts, and returns the existing `xcode-plugin.v0.3` envelope as JSON text. Tool annotations mark read-only discovery/help tools separately from mutating build/test/run workflows, but the annotations are hints only. It must not call Apple developer tools directly.
+The server is intentionally thin. It validates typed arguments, rejects free-form execution keys such as `command`, `shell`, `args`, `script`, and `raw`, runs `bin/xcode` through `Process` direct argv, enforces MCP-side timeouts, and returns the existing `xcode-plugin.v0.3` envelope as JSON text. Tool annotations mark read-only discovery/help tools separately from mutating build/test/run/menu workflows, but the annotations are hints only. It must not call Apple developer tools directly.
+
+Typed menu control is catalog-based, not raw UI execution. `xcode_ide_menu_catalog` returns stable `action_id` values and safety classes for visible Xcode menu actions. `xcode_ide_menu_perform` maps only to `bin/xcode ide menu-perform --action-id ...`; Python resolves that id through the static catalog, runs native/AX preflight, and presses the cataloged menu item with System Events. The native helper remains read-only and never performs AXPress.
 
 The MCP server remains a Codex-managed stdio child process, not a daemon or warm background service. It intentionally avoids preloading Xcode/AppKit/simulator state so idle RSS stays low. During tool calls, stdout/stderr are drained while the child process runs, and active `bin/xcode` descendants are terminated on timeout or MCP server shutdown. The running server publishes a tiny temp-file health snapshot for `bin/xcode mcp health --json`; it does not expose health as an MCP tool.
 

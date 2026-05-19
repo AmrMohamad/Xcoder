@@ -51,6 +51,7 @@ bin/xcode ide scheme-action --workspace-path /path/to/App.xcodeproj --action bui
 ```bash
 bin/xcode ide status --json
 bin/xcode native permissions status --json
+bin/xcode native permissions request --json
 bin/xcode native ax xcode-windows --json
 bin/xcode native ax xcode-windows --include-paths --json
 bin/xcode ide activate --json
@@ -58,6 +59,8 @@ bin/xcode ide list-workspaces --json
 bin/xcode ide workspace-info --workspace-path /path/to/App.xcodeproj --json
 bin/xcode ide scheme-action --workspace-path /path/to/App.xcodeproj --action test --scheme 'App (Debug)' --destination-id <UDID> --timeout-seconds 300 --json
 ```
+
+When using MCP, permission checks and prompts are exposed as `xcode_native_permissions_status` and `xcode_native_permissions_request`.
 
 ## Boundary
 

@@ -40,6 +40,34 @@ enum XcodeToolCatalog {
             annotations: readOnlyAnnotations
         ),
         .init(
+            name: "xcode_native_permissions_status",
+            description: "Check whether the plugin native helper is currently trusted for macOS Accessibility without showing a prompt.",
+            timeoutSeconds: 8,
+            inputSchema: objectSchema(),
+            annotations: readOnlyAnnotations
+        ),
+        .init(
+            name: "xcode_native_helper_identity",
+            description: "Inspect the native helper code-signing identity and whether it is packaged as a TCC-stable app bundle.",
+            timeoutSeconds: 8,
+            inputSchema: objectSchema(),
+            annotations: readOnlyAnnotations
+        ),
+        .init(
+            name: "xcode_native_helper_bundle",
+            description: "Package and sign the native helper as XcodeNativeHelper.app so macOS Accessibility/TCC can bind trust durably.",
+            timeoutSeconds: 30,
+            inputSchema: objectSchema(),
+            annotations: permissionPromptAnnotations
+        ),
+        .init(
+            name: "xcode_native_permissions_request",
+            description: "Ask macOS to show the Accessibility permission prompt for the plugin native helper, then return the current trust state. User approval is still required in System Settings.",
+            timeoutSeconds: 15,
+            inputSchema: objectSchema(),
+            annotations: permissionPromptAnnotations
+        ),
+        .init(
             name: "xcode_native_windows",
             description: "Inspect top-level Xcode Accessibility windows and modal blockers without UI mutation.",
             timeoutSeconds: 15,
@@ -87,6 +115,26 @@ enum XcodeToolCatalog {
             annotations: readOnlyAnnotations
         ),
         .init(
+            name: "xcode_ide_menu_catalog",
+            description: "List the typed Xcode menu action catalog, including stable action ids, shortcuts, safety classes, implementation status, and preferred typed tools where menu pressing is intentionally not used.",
+            timeoutSeconds: 10,
+            inputSchema: objectSchema(),
+            annotations: readOnlyAnnotations
+        ),
+        .init(
+            name: "xcode_ide_menu_perform",
+            description: "Perform one cataloged Xcode menu action by stable action_id. This never accepts raw menu paths or arbitrary AX selectors. Destructive actions require allow_destructive=true.",
+            timeoutSeconds: 30,
+            inputSchema: objectSchema(
+                properties: [
+                    "action_id": stringSchema(description: "Stable action id from xcode_ide_menu_catalog, such as view.navigator.project or view.debug_area.activate_console."),
+                    "allow_destructive": boolSchema(description: "Required for destructive catalog actions such as close, clear, delete, or stop.", defaultValue: false)
+                ],
+                required: ["action_id"]
+            ),
+            annotations: mutatingAnnotations
+        ),
+        .init(
             name: "xcode_ide_preflight",
             description: "Check Xcode GUI readiness, workspace, scheme, destination, and native modal blockers before IDE automation. Examples: 1. workspace_path=\"/Users/me/App/App.xcodeproj\", scheme=\"App\". 2. workspace_path=\"/Users/me/App/App.xcworkspace\", scheme=\"AppTests\", destination_name=\"iPhone 16\".",
             timeoutSeconds: 30,
@@ -111,6 +159,7 @@ enum XcodeToolCatalog {
                     "scheme": stringSchema(description: "Scheme to build."),
                     "destination_id": stringSchema(description: "Optional simulator/device identifier."),
                     "destination_name": stringSchema(description: "Optional Xcode destination name."),
+                    "require_native_preflight": boolSchema(description: "Fail if native AX window/modal inspection is unavailable. Defaults to false so missing Accessibility permission warns instead of blocking the IDE action.", defaultValue: false),
                     "timeout_seconds": intSchema(description: "IDE build timeout in seconds.", defaultValue: 600)
                 ],
                 required: ["workspace_path", "scheme"]
@@ -127,6 +176,7 @@ enum XcodeToolCatalog {
                     "scheme": stringSchema(description: "Scheme to test."),
                     "destination_id": stringSchema(description: "Optional simulator/device identifier."),
                     "destination_name": stringSchema(description: "Optional Xcode destination name."),
+                    "require_native_preflight": boolSchema(description: "Fail if native AX window/modal inspection is unavailable. Defaults to false so missing Accessibility permission warns instead of blocking the IDE action.", defaultValue: false),
                     "timeout_seconds": intSchema(description: "IDE test timeout in seconds.", defaultValue: 600)
                 ],
                 required: ["workspace_path", "scheme"]
@@ -143,6 +193,7 @@ enum XcodeToolCatalog {
                     "scheme": stringSchema(description: "Scheme to run."),
                     "destination_id": stringSchema(description: "Optional simulator/device identifier."),
                     "destination_name": stringSchema(description: "Optional Xcode destination name."),
+                    "require_native_preflight": boolSchema(description: "Fail if native AX window/modal inspection is unavailable. Defaults to false so missing Accessibility permission warns instead of blocking the IDE action.", defaultValue: false),
                     "timeout_seconds": intSchema(description: "IDE run poll timeout in seconds. Values above 95 are capped so the MCP call returns before Codex's protocol timeout.", defaultValue: XcodeMCPTimeouts.ideRunActionSeconds)
                 ],
                 required: ["workspace_path", "scheme"]
@@ -265,6 +316,13 @@ enum XcodeToolCatalog {
     private static let mutatingAnnotations = Tool.Annotations(
         readOnlyHint: false,
         destructiveHint: true,
+        idempotentHint: false,
+        openWorldHint: false
+    )
+
+    private static let permissionPromptAnnotations = Tool.Annotations(
+        readOnlyHint: false,
+        destructiveHint: false,
         idempotentHint: false,
         openWorldHint: false
     )

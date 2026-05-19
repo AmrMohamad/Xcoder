@@ -233,7 +233,6 @@ def run_app_command(args: argparse.Namespace) -> int:
         destination_id,
         "--timeout-seconds",
         str(min(args.timeout_seconds, 600)),
-        "--require-native-preflight",
         "--json",
     ]
     build = call_plugin(build_args, timeout_seconds=min(args.timeout_seconds, 650))
@@ -252,7 +251,6 @@ def run_app_command(args: argparse.Namespace) -> int:
         destination_id,
         "--timeout-seconds",
         str(min(args.timeout_seconds, 180)),
-        "--require-native-preflight",
         "--json",
     ]
     run = call_plugin(run_args, timeout_seconds=min(args.timeout_seconds, 220))

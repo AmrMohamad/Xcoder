@@ -38,6 +38,9 @@ EXIT_CODES: dict[str, int] = {
     "xcode_modal_blocking": 23,
     "xcode_activation_failed": 24,
     "workspace_open_failed": 25,
+    "xcode_menu_action_blocked": 26,
+    "xcode_menu_item_not_found": 27,
+    "xcode_menu_item_disabled": 28,
     "simulator_boot_failed": 30,
     "install_failed": 31,
     "launch_failed": 32,
@@ -56,6 +59,27 @@ EXIT_CODES: dict[str, int] = {
 
 def plugin_root() -> Path:
     return Path(__file__).resolve().parents[1]
+
+
+NATIVE_HELPER_EXECUTABLE_NAME = "xcode-native-helper"
+NATIVE_HELPER_APP_NAME = "XcodeNativeHelper.app"
+
+
+def native_helper_legacy_executable_path(root: Path | None = None) -> Path:
+    return (root or plugin_root()) / "bin" / NATIVE_HELPER_EXECUTABLE_NAME
+
+
+def native_helper_bundle_path(root: Path | None = None) -> Path:
+    return (root or plugin_root()) / "bin" / NATIVE_HELPER_APP_NAME
+
+
+def native_helper_bundle_executable_path(root: Path | None = None) -> Path:
+    return native_helper_bundle_path(root) / "Contents" / "MacOS" / NATIVE_HELPER_EXECUTABLE_NAME
+
+
+def native_helper_path(root: Path | None = None) -> Path:
+    bundled = native_helper_bundle_executable_path(root)
+    return bundled if bundled.exists() else native_helper_legacy_executable_path(root)
 
 
 def plugin_version() -> str:

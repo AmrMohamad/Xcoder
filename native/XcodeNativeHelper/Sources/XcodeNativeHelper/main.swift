@@ -33,6 +33,9 @@ struct NativeResponse {
         }
         do {
             let data = try JSONSerialization.data(withJSONObject: payload, options: [.prettyPrinted, .sortedKeys])
+            if let outputPath = outputJSONPathArgument() {
+                try data.write(to: URL(fileURLWithPath: outputPath), options: [.atomic])
+            }
             FileHandle.standardOutput.write(data)
             FileHandle.standardOutput.write(Data("\n".utf8))
         } catch {
@@ -58,6 +61,30 @@ struct NativeResponse {
     }
 }
 
+func outputJSONPathArgument() -> String? {
+    let args = CommandLine.arguments
+    guard let index = args.firstIndex(of: "--output-json-path"), args.indices.contains(index + 1) else {
+        return nil
+    }
+    return args[index + 1]
+}
+
+func commandArguments() -> [String] {
+    var result: [String] = []
+    var iterator = CommandLine.arguments.dropFirst().makeIterator()
+    while let arg = iterator.next() {
+        if arg == "--json" {
+            continue
+        }
+        if arg == "--output-json-path" {
+            _ = iterator.next()
+            continue
+        }
+        result.append(arg)
+    }
+    return result
+}
+
 func buildArch() -> String {
     #if arch(arm64)
     return "arm64"
@@ -66,6 +93,17 @@ func buildArch() -> String {
     #else
     return "unknown"
     #endif
+}
+
+func helperRuntimeIdentity() -> [String: Any] {
+    let bundle = Bundle.main
+    return [
+        "bundle_identifier": bundle.bundleIdentifier ?? "",
+        "bundle_path": bundle.bundleURL.path,
+        "bundle_executable_path": bundle.executableURL?.path ?? "",
+        "executable_path": CommandLine.arguments.first ?? "",
+        "process_identifier": Int(ProcessInfo.processInfo.processIdentifier)
+    ]
 }
 
 func accessibilityTrusted(prompt: Bool) -> Bool {
@@ -290,17 +328,15 @@ func usage() -> Never {
 
 func handleHelper(_ args: [String]) -> Never {
     guard args.first == "version" else { usage() }
+    var summary = helperRuntimeIdentity()
+    summary["helper_schema_version"] = helperSchemaVersion
+    summary["helper_version"] = helperVersion
+    summary["build_arch"] = buildArch()
+    summary["swift_version"] = "unknown"
     NativeResponse.emit(
         ok: true,
         commandName: "helper.version",
-        summary: [
-            "helper_schema_version": helperSchemaVersion,
-            "helper_version": helperVersion,
-            "build_arch": buildArch(),
-            "swift_version": "unknown",
-            "process_identifier": Int(ProcessInfo.processInfo.processIdentifier),
-            "executable_path": CommandLine.arguments.first ?? ""
-        ]
+        summary: summary
     )
 }
 
@@ -316,7 +352,7 @@ func handlePermissions(_ args: [String]) -> Never {
                 "accessibility_trusted": trusted,
                 "prompted": false
             ],
-            nextActions: trusted ? [] : ["Run bin/xcode native permissions request --json if you want macOS to show the Accessibility prompt."]
+            nextActions: trusted ? [] : ["Run bin/xcode native permissions request --json, then approve XcodeNativeHelper.app in System Settings > Privacy & Security > Accessibility."]
         )
     case "request":
         let trusted = accessibilityTrusted(prompt: true)
@@ -453,7 +489,7 @@ func handleAX(_ args: [String]) -> Never {
             commandName: "ax.xcode-windows",
             summary: "Accessibility permission is not granted for xcode-native-helper",
             errorType: "accessibility_not_trusted",
-            nextActions: ["Run bin/xcode native permissions request --json if you want macOS to show the Accessibility prompt."],
+            nextActions: ["Run bin/xcode native permissions request --json, then approve XcodeNativeHelper.app in System Settings > Privacy & Security > Accessibility."],
             exitCode: 4
         )
     }
@@ -490,7 +526,7 @@ func handleAX(_ args: [String]) -> Never {
     )
 }
 
-let rawArgs = Array(CommandLine.arguments.dropFirst()).filter { $0 != "--json" }
+let rawArgs = commandArguments()
 guard let group = rawArgs.first else { usage() }
 let rest = Array(rawArgs.dropFirst())
 

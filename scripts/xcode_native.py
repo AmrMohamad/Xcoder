@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import plistlib
+import shutil
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -12,6 +15,10 @@ from xcode_common import (
     compact_output,
     emit_failure,
     emit_success,
+    native_helper_bundle_executable_path,
+    native_helper_bundle_path,
+    native_helper_legacy_executable_path,
+    native_helper_path,
     normalize_path,
     plugin_root,
     redacted_home_path,
@@ -20,10 +27,12 @@ from xcode_common import (
 
 
 SUPPORTED_HELPER_SCHEMA = "xcode-native-helper.v0.1"
+DEFAULT_HELPER_IDENTIFIER = "com.amrmohamad.xcoder.native-helper"
+HELPER_APP_DISPLAY_NAME = "xcode-native-helper"
 
 
 def helper_path() -> Path:
-    return plugin_root() / "bin" / "xcode-native-helper"
+    return native_helper_path()
 
 
 def parse_args() -> argparse.Namespace:
@@ -34,6 +43,13 @@ def parse_args() -> argparse.Namespace:
     helper = subparsers.add_parser("helper", help="Inspect the native helper.")
     helper_sub = helper.add_subparsers(dest="command", required=True)
     helper_sub.add_parser("version", help="Print native helper version metadata.")
+    helper_sub.add_parser("identity", help="Print native helper code-signing identity metadata.")
+    helper_sign = helper_sub.add_parser("sign", help="Sign the native helper with a stable local code-signing identity.")
+    helper_sign.add_argument("--identity", default=None, help="Code-signing identity name or hash. Defaults to the first Apple Development identity.")
+    helper_sign.add_argument("--identifier", default=DEFAULT_HELPER_IDENTIFIER, help="Stable code-signing identifier for TCC matching.")
+    helper_bundle = helper_sub.add_parser("bundle", help="Package the native helper as a signed .app bundle for durable TCC matching.")
+    helper_bundle.add_argument("--identity", default=None, help="Code-signing identity name or hash. Defaults to the first Apple Development identity.")
+    helper_bundle.add_argument("--identifier", default=DEFAULT_HELPER_IDENTIFIER, help="Bundle identifier for TCC and LaunchServices matching.")
 
     permissions = subparsers.add_parser("permissions", help="Inspect or request native permissions.")
     permissions_sub = permissions.add_subparsers(dest="command", required=True)
@@ -75,6 +91,8 @@ def include_paths(args: argparse.Namespace) -> bool:
 
 
 def helper_timeout(args: argparse.Namespace) -> int:
+    if args.group == "helper" and args.command in {"bundle", "sign"}:
+        return 30
     if args.group == "helper" or args.group == "permissions":
         return 5
     if args.group == "ax":
@@ -82,6 +100,10 @@ def helper_timeout(args: argparse.Namespace) -> int:
     if args.group == "app" and args.command in {"activate-xcode", "open-workspace"}:
         return 15
     return 5
+
+
+def should_launch_via_bundle(args: argparse.Namespace) -> bool:
+    return native_helper_bundle_path().exists() and args.group in {"ax", "permissions"}
 
 
 def preflight_args(args: argparse.Namespace) -> int | None:
@@ -145,6 +167,36 @@ def unavailable(args: argparse.Namespace, path: Path) -> int:
     )
 
 
+def active_codesign_target() -> Path:
+    bundle = native_helper_bundle_path()
+    return bundle if bundle.exists() else helper_path()
+
+
+def helper_bundle_info(identifier: str) -> dict[str, Any]:
+    return {
+        "CFBundleDevelopmentRegion": "en",
+        "CFBundleDisplayName": HELPER_APP_DISPLAY_NAME,
+        "CFBundleExecutable": "xcode-native-helper",
+        "CFBundleIdentifier": identifier,
+        "CFBundleInfoDictionaryVersion": "6.0",
+        "CFBundleName": "XcodeNativeHelper",
+        "CFBundlePackageType": "APPL",
+        "CFBundleShortVersionString": "0.3.0",
+        "CFBundleVersion": "0.3.0",
+        "LSMinimumSystemVersion": "14.0",
+        "LSUIElement": True,
+    }
+
+
+def write_helper_bundle_info_plist(bundle: Path, *, identifier: str) -> Path:
+    contents = bundle / "Contents"
+    contents.mkdir(parents=True, exist_ok=True)
+    info_path = contents / "Info.plist"
+    with info_path.open("wb") as stream:
+        plistlib.dump(helper_bundle_info(identifier), stream, sort_keys=True)
+    return info_path
+
+
 def parse_helper_json(result: dict[str, Any]) -> tuple[dict[str, Any] | None, str | None]:
     try:
         data = json.loads(result["stdout"])
@@ -153,6 +205,262 @@ def parse_helper_json(result: dict[str, Any]) -> tuple[dict[str, Any] | None, st
     if not isinstance(data, dict):
         return None, "Native helper JSON was not an object"
     return data, None
+
+
+def run_helper_direct(path: Path, args: argparse.Namespace) -> dict[str, Any]:
+    return run_command([str(path), *helper_argv(args)], timeout_seconds=helper_timeout(args))
+
+
+def run_helper_via_launchservices(args: argparse.Namespace) -> dict[str, Any]:
+    bundle = native_helper_bundle_path()
+    with tempfile.TemporaryDirectory(prefix="xcode-native-helper-") as tmpdir:
+        output_path = Path(tmpdir) / "response.json"
+        command = [
+            "open",
+            "-W",
+            "-n",
+            str(bundle),
+            "--args",
+            *helper_argv(args),
+            "--output-json-path",
+            str(output_path),
+        ]
+        result = run_command(command, timeout_seconds=helper_timeout(args) + 10)
+        stdout = ""
+        if output_path.exists():
+            stdout = output_path.read_text(encoding="utf-8")
+        elif result["stdout"].strip():
+            stdout = result["stdout"]
+        return {
+            **result,
+            "stdout": stdout,
+            "launchservices": True,
+            "bundle_path": str(bundle),
+        }
+
+
+def codesign_identity(path: Path) -> dict[str, Any]:
+    result = run_command(["codesign", "-dvvv", "-r-", str(path)], timeout_seconds=10)
+    output = compact_output(result["stdout"] + result["stderr"], 4000)
+    return {
+        "exit_code": result["exit_code"],
+        "present": result["exit_code"] == 0,
+        "adhoc": "Signature=adhoc" in output or "Signature=Ad Hoc" in output,
+        "identifier": extract_codesign_field(output, "Identifier"),
+        "team_identifier": extract_codesign_field(output, "TeamIdentifier"),
+        "cdhash": extract_codesign_field(output, "CDHash"),
+        "designated_requirement": extract_designated_requirement(output),
+        "output": output,
+    }
+
+
+def extract_codesign_field(output: str, field: str) -> str | None:
+    prefix = f"{field}="
+    for line in output.splitlines():
+        if line.startswith(prefix):
+            return line.removeprefix(prefix).strip()
+    return None
+
+
+def extract_designated_requirement(output: str) -> str | None:
+    marker = "designated => "
+    for line in output.splitlines():
+        if line.startswith(marker):
+            return line.removeprefix(marker).strip()
+    return None
+
+
+def helper_identity_command(path: Path) -> int:
+    target = active_codesign_target()
+    identity = codesign_identity(target)
+    status = "success" if identity["present"] else "failure"
+    summary = "Native helper code-signing identity inspected" if identity["present"] else "Native helper code-signing identity unavailable"
+    details = {
+        "helper_path": redacted_home_path(str(path)),
+        "legacy_helper_path": redacted_home_path(str(native_helper_legacy_executable_path())),
+        "bundle_path": redacted_home_path(str(native_helper_bundle_path())),
+        "codesign_target": redacted_home_path(str(target)),
+        "bundled": native_helper_bundle_path().exists(),
+        "codesign": identity,
+        "tcc_stable": bool(identity.get("team_identifier")) and not bool(identity.get("adhoc")),
+    }
+    warnings: list[str] = []
+    next_actions: list[str] = []
+    if identity.get("adhoc"):
+        warnings.append("Native helper is ad-hoc signed; macOS Accessibility may show a toggle that does not bind durably to this helper.")
+        next_actions.append("Run bin/xcode native helper bundle --json, then request and approve Accessibility again.")
+    if not native_helper_bundle_path().exists():
+        warnings.append("Native helper is not packaged as an app bundle; LaunchServices/TCC may not match the Accessibility row reliably.")
+        next_actions.append("Run bin/xcode native helper bundle --json, then add XcodeNativeHelper.app in System Settings > Privacy & Security > Accessibility.")
+    if identity["present"]:
+        return emit_success("native.helper.identity", summary, details=details, warnings=warnings, next_actions=next_actions)
+    return emit_failure(
+        "native.helper.identity",
+        "native_helper_failed",
+        summary,
+        details=details,
+        warnings=warnings,
+        next_actions=next_actions,
+        exit_code=EXIT_CODES["native_helper_failed"],
+    )
+
+
+def find_default_signing_identity() -> tuple[str | None, str]:
+    result = run_command(["security", "find-identity", "-v", "-p", "codesigning"], timeout_seconds=10)
+    output = result["stdout"] + result["stderr"]
+    if result["exit_code"] != 0:
+        return None, compact_output(output, 4000)
+    for line in output.splitlines():
+        if "Apple Development:" not in line:
+            continue
+        parts = line.split('"')
+        if len(parts) >= 2:
+            return parts[1], compact_output(output, 4000)
+    return None, compact_output(output, 4000)
+
+
+def helper_sign_command(path: Path, *, identity: str | None, identifier: str) -> int:
+    target = active_codesign_target()
+    selected_identity = identity
+    identity_output = ""
+    if not selected_identity:
+        selected_identity, identity_output = find_default_signing_identity()
+    if not selected_identity:
+        return emit_failure(
+            "native.helper.sign",
+            "native_helper_failed",
+            "No Apple Development code-signing identity is available for the native helper",
+            details={"helper_path": redacted_home_path(str(path)), "identity_lookup": identity_output},
+            next_actions=["Install or unlock an Apple Development signing identity, then retry."],
+            exit_code=EXIT_CODES["native_helper_failed"],
+        )
+
+    sign = run_command(
+        [
+            "codesign",
+            "--force",
+            "--sign",
+            selected_identity,
+            "--identifier",
+            identifier,
+            str(target),
+        ],
+        timeout_seconds=30,
+    )
+    identity_after = codesign_identity(target)
+    details = {
+        "helper_path": redacted_home_path(str(path)),
+        "codesign_target": redacted_home_path(str(target)),
+        "bundled": native_helper_bundle_path().exists(),
+        "requested_identity": selected_identity,
+        "requested_identifier": identifier,
+        "codesign_exit_code": sign["exit_code"],
+        "codesign_output": compact_output(sign["stdout"] + sign["stderr"], 4000),
+        "codesign": identity_after,
+        "tcc_stable": bool(identity_after.get("team_identifier")) and not bool(identity_after.get("adhoc")),
+    }
+    if sign["exit_code"] != 0:
+        return emit_failure(
+            "native.helper.sign",
+            "native_helper_failed",
+            "Native helper signing failed",
+            details=details,
+            exit_code=EXIT_CODES["native_helper_failed"],
+        )
+    return emit_success(
+        "native.helper.sign",
+        "Native helper signed with a stable code identity",
+        details=details,
+        next_actions=[
+            "Run bin/xcode native permissions request --json.",
+            "Approve XcodeNativeHelper.app in System Settings > Privacy & Security > Accessibility.",
+            "Verify with bin/xcode native permissions status --json.",
+        ],
+    )
+
+
+def helper_bundle_command(path: Path, *, identity: str | None, identifier: str) -> int:
+    legacy = native_helper_legacy_executable_path()
+    bundle = native_helper_bundle_path()
+    bundled_executable = native_helper_bundle_executable_path()
+    source = legacy if legacy.exists() else path
+    if not source.exists() or not source.is_file():
+        return emit_failure(
+            "native.helper.bundle",
+            "native_helper_unavailable",
+            "Native helper executable is not available to package",
+            details={
+                "legacy_helper_path": redacted_home_path(str(legacy)),
+                "active_helper_path": redacted_home_path(str(path)),
+                "bundle_path": redacted_home_path(str(bundle)),
+            },
+            next_actions=["Build native/XcodeNativeHelper and install bin/xcode-native-helper first."],
+            exit_code=EXIT_CODES["native_helper_unavailable"],
+        )
+
+    selected_identity = identity
+    identity_output = ""
+    if not selected_identity:
+        selected_identity, identity_output = find_default_signing_identity()
+    if not selected_identity:
+        return emit_failure(
+            "native.helper.bundle",
+            "native_helper_failed",
+            "No Apple Development code-signing identity is available for the native helper bundle",
+            details={"identity_lookup": identity_output},
+            next_actions=["Install or unlock an Apple Development signing identity, then retry."],
+            exit_code=EXIT_CODES["native_helper_failed"],
+        )
+
+    macos_dir = bundle / "Contents" / "MacOS"
+    macos_dir.mkdir(parents=True, exist_ok=True)
+    if source.resolve(strict=False) != bundled_executable.resolve(strict=False):
+        shutil.copy2(source, bundled_executable)
+    bundled_executable.chmod(0o755)
+    info_path = write_helper_bundle_info_plist(bundle, identifier=identifier)
+    sign = run_command(
+        [
+            "codesign",
+            "--force",
+            "--sign",
+            selected_identity,
+            "--identifier",
+            identifier,
+            str(bundle),
+        ],
+        timeout_seconds=30,
+    )
+    identity_after = codesign_identity(bundle)
+    details = {
+        "source_helper_path": redacted_home_path(str(source)),
+        "helper_path": redacted_home_path(str(bundled_executable)),
+        "legacy_helper_path": redacted_home_path(str(legacy)),
+        "bundle_path": redacted_home_path(str(bundle)),
+        "info_plist": redacted_home_path(str(info_path)),
+        "requested_identity": selected_identity,
+        "requested_identifier": identifier,
+        "codesign_exit_code": sign["exit_code"],
+        "codesign_output": compact_output(sign["stdout"] + sign["stderr"], 4000),
+        "codesign": identity_after,
+        "tcc_stable": bool(identity_after.get("team_identifier")) and not bool(identity_after.get("adhoc")),
+    }
+    if sign["exit_code"] != 0:
+        return emit_failure(
+            "native.helper.bundle",
+            "native_helper_failed",
+            "Native helper bundle signing failed",
+            details=details,
+            exit_code=EXIT_CODES["native_helper_failed"],
+        )
+    return emit_success(
+        "native.helper.bundle",
+        "Native helper packaged as a signed app bundle",
+        details=details,
+        next_actions=[
+            "Add XcodeNativeHelper.app in System Settings > Privacy & Security > Accessibility.",
+            "Verify with bin/xcode native permissions status --json.",
+        ],
+    )
 
 
 def normalize_helper_output(args: argparse.Namespace, native: dict[str, Any], result: dict[str, Any]) -> int:
@@ -167,13 +475,18 @@ def normalize_helper_output(args: argparse.Namespace, native: dict[str, Any], re
         "helper_version": helper_version,
         "exit_code": result["exit_code"],
     }
+    if result.get("launchservices"):
+        helper_meta["launchservices"] = True
+        helper_meta["bundle_path"] = redacted_home_path(str(result.get("bundle_path") or ""))
     details = {
         "native_helper": helper_meta,
         "native": native,
     }
     warnings = list(native.get("warnings") or [])
     if result["stderr"].strip():
-        warnings.append(compact_output(result["stderr"]))
+        stderr = compact_output(result["stderr"])
+        if not (result.get("launchservices") and "Unable to block on application" in stderr):
+            warnings.append(stderr)
 
     if schema != SUPPORTED_HELPER_SCHEMA:
         return emit_failure(
@@ -214,7 +527,14 @@ def main() -> int:
     if not path.exists() or not path.is_file() or not (path.stat().st_mode & 0o111):
         return unavailable(args, path)
 
-    result = run_command([str(path), *helper_argv(args)], timeout_seconds=helper_timeout(args))
+    if args.group == "helper" and args.command == "identity":
+        return helper_identity_command(path)
+    if args.group == "helper" and args.command == "bundle":
+        return helper_bundle_command(path, identity=args.identity, identifier=args.identifier)
+    if args.group == "helper" and args.command == "sign":
+        return helper_sign_command(path, identity=args.identity, identifier=args.identifier)
+
+    result = run_helper_via_launchservices(args) if should_launch_via_bundle(args) else run_helper_direct(path, args)
     if result.get("timed_out"):
         return emit_failure(
             command_name(args),

@@ -45,6 +45,8 @@ REQUIRED_PACKAGE_FILES = {
     "bin/xcode-mcp",
     "bin/xcode-mcp-server",
     "bin/xcode-native-helper",
+    "bin/XcodeNativeHelper.app/Contents/Info.plist",
+    "bin/XcodeNativeHelper.app/Contents/MacOS/xcode-native-helper",
     "native/XcodeMCPServer/Package.swift",
     "native/XcodeMCPServer/Package.resolved",
     "native/XcodeMCPServer/Sources/XcodeMCPServer/ActiveProcessRegistry.swift",
@@ -75,6 +77,7 @@ REQUIRED_EXECUTABLE_FILES = {
     "bin/xcode-mcp",
     "bin/xcode-mcp-server",
     "bin/xcode-native-helper",
+    "bin/XcodeNativeHelper.app/Contents/MacOS/xcode-native-helper",
 }
 
 

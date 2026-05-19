@@ -19,11 +19,17 @@ Expected tool names after Codex reload:
 ```text
 mcp__xcode__xcode_doctor
 mcp__xcode__xcode_native_state
+mcp__xcode__xcode_native_permissions_status
+mcp__xcode__xcode_native_helper_identity
+mcp__xcode__xcode_native_helper_bundle
+mcp__xcode__xcode_native_permissions_request
 mcp__xcode__xcode_native_windows
 mcp__xcode__xcode_ide_status
 mcp__xcode__xcode_ide_workspace_info
 mcp__xcode__xcode_ide_list_schemes
 mcp__xcode__xcode_ide_list_destinations
+mcp__xcode__xcode_ide_menu_catalog
+mcp__xcode__xcode_ide_menu_perform
 mcp__xcode__xcode_ide_preflight
 mcp__xcode__xcode_ide_build
 mcp__xcode__xcode_ide_test
@@ -38,6 +44,8 @@ mcp__xcode__xcode_help
 These tools are wrappers over `bin/xcode`. They are the primary discovery surface, not a separate Xcode implementation.
 
 Use `xcode_help` when Codex needs canonical local guidance before choosing a route. Supported topics are `first-time`, `ide-vs-cli`, `fail-recovery`, `scheme-not-testable`, `destination-ambiguous`, `build-json`, and `package-release`.
+
+Use `xcode_ide_menu_catalog` to inspect the typed Xcode menu map. Use `xcode_ide_menu_perform` only with an `action_id` returned by that catalog. The menu performer never accepts raw menu paths or arbitrary Accessibility selectors. Destructive menu actions are rejected unless `allow_destructive` is true; external-effect and dynamic project-specific menu entries are cataloged but intentionally blocked in this pass. Prefer existing typed tools such as `xcode_ide_build`, `xcode_ide_test`, `xcode_ide_run`, `xcode_ide_list_schemes`, and `xcode_ide_list_destinations` over menu pressing when those routes exist.
 
 For MCP process diagnostics, use `bin/xcode mcp health --json`. Health is intentionally CLI-only; when a stdio server is running it reads the server's lightweight published state file and reports that server's pid, uptime, RSS when available, active child pid, queued tool count, and running state. If no fresh running-server state exists, the command reports a one-shot `self_probe` payload instead of inventing active-child state.
 
@@ -65,6 +73,8 @@ bin/xcode native ax xcode-windows --json
 bin/xcode ide status --json
 bin/xcode ide list-workspaces --json
 bin/xcode ide workspace-info --workspace-path /path/to/App.xcodeproj --json
+bin/xcode ide menu-catalog --json
+bin/xcode ide menu-perform --action-id view.navigator.project --json
 bin/xcode ide preflight --workspace-path /path/to/App.xcodeproj --scheme 'App (Debug)' --destination-id <UDID> --json
 bin/xcode context --path /path/to/App.xcodeproj --scheme 'App (Debug)' --json
 bin/xcode simulator resolve --name "iPhone SE (3rd generation)" --runtime "iOS 18.5" --json
@@ -185,4 +195,4 @@ bin/xcode native app installed-xcodes --json
 bin/xcode native ax xcode-windows --json
 ```
 
-`native ax xcode-windows` needs Accessibility permission. If permission is missing, the command should fail with `permission_denied`, not mutate anything.
+`native ax xcode-windows` needs Accessibility permission. When `bin/XcodeNativeHelper.app` exists, the adapter launches that bundle through LaunchServices so macOS evaluates the trusted helper app instead of the parent Codex process. If permission is still missing, the command should fail with `permission_denied`, not mutate anything.

@@ -119,12 +119,16 @@ cp .build/release/xcode-native-helper ../../bin/xcode-native-helper
 chmod +x ../../bin/xcode-native-helper
 
 cd ../..
+bin/xcode native helper bundle --json
 bin/xcode native helper version --json
+bin/xcode native helper identity --json
 bin/xcode native permissions status --json
 bin/xcode native app xcode-state --json
 ```
 
 `native permissions status` does not trigger a macOS prompt. `native permissions request` is the explicit command that asks macOS to show the Accessibility permission prompt.
+
+Run `native helper bundle` after every helper rebuild. It packages `bin/XcodeNativeHelper.app`, signs it with a stable Apple Development identity, and makes Accessibility checks launch through LaunchServices so macOS evaluates the app bundle rather than the parent Codex process. If `native permissions status` remains false after the helper is enabled in System Settings, inspect `bin/xcode native helper identity --json`, rerun `bin/xcode native helper bundle --json`, then approve `XcodeNativeHelper.app` in System Settings > Privacy & Security > Accessibility.
 
 ## Bundled MCP Server
 

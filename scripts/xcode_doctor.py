@@ -9,7 +9,19 @@ import platform
 from pathlib import Path
 from typing import Any
 
-from xcode_common import EXIT_CODES, compact_output, emit_failure, emit_success, normalize_path, plugin_identity, plugin_root, redacted_home_path, run_command
+from xcode_common import (
+    EXIT_CODES,
+    compact_output,
+    emit_failure,
+    emit_success,
+    native_helper_bundle_path,
+    native_helper_path as resolve_native_helper_path,
+    normalize_path,
+    plugin_identity,
+    plugin_root,
+    redacted_home_path,
+    run_command,
+)
 
 
 REQUIRED_XCODEBUILD_FLAGS = [
@@ -99,7 +111,7 @@ def add_check(
 
 
 def native_helper_path() -> Path:
-    return plugin_root() / "bin" / "xcode-native-helper"
+    return resolve_native_helper_path()
 
 
 def file_sha256(path: Path) -> str:
@@ -112,7 +124,7 @@ def file_sha256(path: Path) -> str:
 
 def helper_identity_details(helper: Path) -> dict[str, Any]:
     archs = run_command(["lipo", "-archs", str(helper)], timeout_seconds=10)
-    codesign = run_command(["codesign", "-dv", str(helper)], timeout_seconds=10)
+    codesign = run_command(["codesign", "-dvvv", "-r-", str(helper)], timeout_seconds=10)
     spctl = run_command(["spctl", "-a", "-vv", str(helper)], timeout_seconds=10)
     build_version = run_command(["vtool", "-show-build", str(helper)], timeout_seconds=10)
     quarantine = run_command(["xattr", "-p", "com.apple.quarantine", str(helper)], timeout_seconds=10)
@@ -170,11 +182,24 @@ def add_native_helper_checks(checks: list[dict[str, Any]], warnings: list[str], 
             name="native-helper-binary",
             status="optional_unavailable",
             path=str(helper),
+            bundle_path=str(native_helper_bundle_path()),
         )
-        warnings.append("Native Xcode helper is optional and not currently built at bin/xcode-native-helper.")
+        warnings.append("Native Xcode helper is optional and not currently built in bin/XcodeNativeHelper.app or bin/xcode-native-helper.")
         return
 
-    add_check(checks, name="native-helper-binary", status="optional_ok", **helper_identity_details(helper))
+    native_identity = helper_identity_details(helper)
+    native_identity["bundle_path"] = redacted_home_path(str(native_helper_bundle_path()))
+    native_identity["bundled"] = native_helper_bundle_path().exists()
+    add_check(checks, name="native-helper-binary", status="optional_ok", **native_identity)
+    if native_identity.get("codesign", {}).get("adhoc"):
+        warnings.append(
+            "Native Xcode helper is ad-hoc signed; macOS Accessibility trust may not bind durably. "
+            "Use bin/xcode native helper bundle --json before requesting Accessibility permission."
+        )
+    if not native_identity.get("bundled"):
+        warnings.append(
+            "Native Xcode helper is not packaged as an app bundle; macOS TCC may show an Accessibility row that the helper process cannot use."
+        )
 
     version = run_command([str(helper), "helper", "version", "--json"], timeout_seconds=20)
     version_status = "ok"
@@ -191,12 +216,13 @@ def add_native_helper_checks(checks: list[dict[str, Any]], warnings: list[str], 
         warnings.append("Native Xcode helper version output was not valid JSON.")
     add_check(checks, name="native-helper-version", status=version_status, **version_details)
 
-    permissions = run_command([str(helper), "permissions", "status", "--json"], timeout_seconds=20)
+    permissions = run_command([str(root / "bin" / "xcode"), "native", "permissions", "status", "--json"], timeout_seconds=25)
     permissions_status = "ok" if permissions["exit_code"] == 0 else "warning"
     permissions_details: dict[str, Any] = {"exit_code": permissions["exit_code"]}
     try:
         permissions_json = json.loads(permissions["stdout"])
         permissions_details["permissions"] = permissions_json.get("summary")
+        permissions_details["adapter"] = permissions_json.get("details", {}).get("native_helper")
     except json.JSONDecodeError:
         permissions_status = "warning"
         permissions_details["output"] = compact_output(permissions["stdout"] + permissions["stderr"], 1200)
