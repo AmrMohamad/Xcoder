@@ -70,7 +70,16 @@ def run_checked(runner: CommandRunner, command: list[str], *, cwd: Path, timeout
 
 class ComponentBuildError(RuntimeError):
     def __init__(self, command: list[str], completed: subprocess.CompletedProcess[str]) -> None:
-        super().__init__(completed.stderr.strip() or completed.stdout.strip() or f"command exited {completed.returncode}")
+        stdout = completed.stdout.strip()
+        stderr = completed.stderr.strip()
+        sections = [
+            f"command exited {completed.returncode}: {' '.join(command)}",
+        ]
+        if stdout:
+            sections.append(f"stdout:\n{stdout[-8000:]}")
+        if stderr:
+            sections.append(f"stderr:\n{stderr[-8000:]}")
+        super().__init__("\n".join(sections))
         self.command = command
         self.completed = completed
 
