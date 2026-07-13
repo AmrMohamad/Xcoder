@@ -48,3 +48,44 @@ jobs:
           path: ${{ runner.temp }}/xcoder-release-artifacts/
           if-no-files-found: error
           retention-days: 14
+
+  minimum-supported-runtime:
+    name: Extracted package smoke on macOS 14
+    needs: verify
+    runs-on: macos-14
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out audit source
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Download verified release evidence
+        uses: actions/download-artifact@v8
+        with:
+          name: xcoder-release-evidence
+          path: ${{ runner.temp }}/xcoder-release-evidence
+
+      - name: Re-audit and smoke-test the package on macOS 14
+        run: |
+          set -o pipefail
+          evidence_dir="$RUNNER_TEMP/xcoder-release-evidence"
+          zip_path=$(find "$evidence_dir" -maxdepth 1 -name 'xcoder-*.zip' -print -quit)
+          test -n "$zip_path"
+          python3 scripts/xcode_package.py audit \
+            --zip "$zip_path" | tee "$evidence_dir/macos-14-audit.json"
+
+      - name: Upload minimum-runtime evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: xcoder-macos-14-evidence
+          path: ${{ runner.temp }}/xcoder-release-evidence/macos-14-audit.json
+          if-no-files-found: error
+          retention-days: 14
