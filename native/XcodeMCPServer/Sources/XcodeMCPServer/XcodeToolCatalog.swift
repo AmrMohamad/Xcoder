@@ -344,7 +344,7 @@ enum XcodeToolCatalog {
                     "destination_id": stringSchema(description: "Optional simulator/device identifier."),
                     "destination_name": stringSchema(description: "Optional Xcode destination name."),
                     "require_native_preflight": boolSchema(description: "Fail if native AX window/modal inspection is unavailable. Defaults to false so missing Accessibility permission warns instead of blocking the IDE action.", defaultValue: false),
-                    "timeout_seconds": intSchema(description: "IDE run poll timeout in seconds. Values above 95 are capped so the MCP call returns before Codex's protocol timeout.", defaultValue: XcodeMCPTimeouts.ideRunActionSeconds)
+                    "timeout_seconds": intSchema(description: "IDE run poll timeout in seconds. Values above \(XcodeMCPTimeouts.ideRunActionSeconds) are capped so the MCP call returns before Codex's protocol timeout.", defaultValue: XcodeMCPTimeouts.ideRunActionSeconds)
                 ],
                 required: ["workspace_path", "scheme"]
             ),

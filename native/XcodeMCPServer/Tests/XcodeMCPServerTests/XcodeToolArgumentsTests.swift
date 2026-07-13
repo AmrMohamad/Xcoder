@@ -121,7 +121,7 @@ final class XcodeToolArgumentsTests: XCTestCase {
                 "--action", "run",
                 "--workspace-path", "/tmp/App.xcodeproj",
                 "--scheme", "App",
-                "--timeout-seconds", "95",
+                "--timeout-seconds", String(XcodeMCPTimeouts.ideRunActionSeconds),
                 "--destination-name", "iPhone SE (3rd generation)",
                 "--json"
             ]
@@ -151,7 +151,10 @@ final class XcodeToolArgumentsTests: XCTestCase {
             ]
         )
 
-        XCTAssertEqual(argv.dropFirst(8).prefix(2), ["--timeout-seconds", "95"])
+        XCTAssertEqual(
+            argv.dropFirst(8).prefix(2),
+            ["--timeout-seconds", String(XcodeMCPTimeouts.ideRunActionSeconds)]
+        )
     }
 
     func testReadOnlyIdeDiscoveryMappings() throws {

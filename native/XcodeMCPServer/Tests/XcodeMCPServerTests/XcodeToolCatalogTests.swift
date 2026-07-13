@@ -156,6 +156,9 @@ final class XcodeToolCatalogTests: XCTestCase {
         }
         XCTAssertEqual(timeoutSchema["default"]?.intValue, XcodeMCPTimeouts.ideRunActionSeconds)
         XCTAssertTrue(timeoutSchema["description"]?.stringValue?.contains("capped") == true)
+        XCTAssertTrue(
+            timeoutSchema["description"]?.stringValue?.contains(String(XcodeMCPTimeouts.ideRunActionSeconds)) == true
+        )
     }
 
     private func properties(for toolName: String) throws -> [String: Value] {
