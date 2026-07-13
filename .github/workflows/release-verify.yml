@@ -19,6 +19,8 @@ jobs:
     steps:
       - name: Check out source
         uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -30,17 +32,19 @@ jobs:
 
       - name: Verify release from the fresh checkout
         run: |
-          mkdir -p artifacts
+          set -o pipefail
+          artifact_dir="$RUNNER_TEMP/xcoder-release-artifacts"
+          mkdir -p "$artifact_dir"
           version=$(python3 -c 'import json; print(json.load(open(".codex-plugin/plugin.json"))["version"])')
           bin/xcode release verify \
-            --output "$PWD/artifacts/xcoder-$version.zip" \
-            --json | tee artifacts/release-verify.json
+            --output "$artifact_dir/xcoder-$version.zip" \
+            --json | tee "$artifact_dir/release-verify.json"
 
       - name: Upload release evidence
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: xcoder-release-evidence
-          path: artifacts/
+          path: ${{ runner.temp }}/xcoder-release-artifacts/
           if-no-files-found: error
           retention-days: 14
