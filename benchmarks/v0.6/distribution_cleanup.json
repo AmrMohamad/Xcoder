@@ -1,0 +1,15 @@
+{
+  "schema_version": "xcoder.benchmark.v0.1",
+  "measurement": "distribution_module_cleanup",
+  "before": {
+    "source_lines": 1283,
+    "source_bytes": 52518,
+    "compiled_code_bytes": 49154
+  },
+  "after": {
+    "source_lines": 260,
+    "source_bytes": 9068,
+    "compiled_code_bytes": 11837
+  },
+  "method": "Python compile plus marshal size; source baseline read from git HEAD"
+}

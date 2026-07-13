@@ -19,8 +19,23 @@ struct ProcessExecutor {
     }
 
     func run(arguments: [String], timeoutSeconds: Int) async throws -> ProcessResult {
+        let clock = ContinuousClock()
+        return try await run(
+            arguments: arguments,
+            deadline: clock.now.advanced(by: .seconds(timeoutSeconds))
+        )
+    }
+
+    func run(
+        arguments: [String],
+        deadline: ContinuousClock.Instant,
+        operationID: UUID = UUID()
+    ) async throws -> ProcessResult {
         guard FileManager.default.isExecutableFile(atPath: executableURL.path) else {
             throw XcodeToolError.subprocess("bin/xcode is not executable at \(executableURL.path)")
+        }
+        guard ContinuousClock().now < deadline else {
+            throw XcodeToolError.timeout(.processLaunch)
         }
 
         let process = Process()
@@ -36,14 +51,14 @@ struct ProcessExecutor {
 
         try process.run()
         let processID = process.processIdentifier
-        await registry.register(processID: processID, arguments: arguments)
+        await registry.register(processID: processID, arguments: arguments, operationID: operationID)
 
         do {
             let result = try await waitForProcessOrTimeout(
                 process,
                 stdoutPipe: stdoutPipe,
                 stderrPipe: stderrPipe,
-                timeoutSeconds: timeoutSeconds
+                deadline: deadline
             )
             await registry.unregister(processID: processID)
             return result
@@ -58,30 +73,46 @@ private func waitForProcessOrTimeout(
     _ process: Process,
     stdoutPipe: Pipe,
     stderrPipe: Pipe,
-    timeoutSeconds: Int
+    deadline: ContinuousClock.Instant
 ) async throws -> ProcessResult {
     let stdoutTask = drainOutput(stdoutPipe.fileHandleForReading)
     let stderrTask = drainOutput(stderrPipe.fileHandleForReading)
-    let timeoutNanoseconds = UInt64(max(timeoutSeconds, 1)) * 1_000_000_000
-    let startedAt = DispatchTime.now().uptimeNanoseconds
+    let clock = ContinuousClock()
 
-    return try await withTaskCancellationHandler {
-        while process.isRunning {
-            if DispatchTime.now().uptimeNanoseconds - startedAt >= timeoutNanoseconds {
-                terminateProcessTree(process)
-                process.waitUntilExit()
-                _ = await stdoutTask.value
-                _ = await stderrTask.value
-                throw XcodeToolError.timeout
+    do {
+        return try await withTaskCancellationHandler {
+            while process.isRunning {
+                if clock.now >= deadline {
+                    terminateProcessTree(process)
+                    process.waitUntilExit()
+                    try? stdoutPipe.fileHandleForReading.close()
+                    try? stderrPipe.fileHandleForReading.close()
+                    _ = await stdoutTask.value
+                    _ = await stderrTask.value
+                    throw XcodeToolError.timeout(.execution)
+                }
+                let nextPoll = min(deadline, clock.now.advanced(by: .milliseconds(50)))
+                try await clock.sleep(until: nextPoll)
             }
-            try await Task.sleep(nanoseconds: 50_000_000)
-        }
 
-        let stdout = await stdoutTask.value
-        let stderr = await stderrTask.value
-        return ProcessResult(exitCode: Int(process.terminationStatus), stdout: stdout, stderr: stderr)
-    } onCancel: {
-        terminateProcessTree(process)
+            let stdout = await stdoutTask.value
+            let stderr = await stderrTask.value
+            return ProcessResult(exitCode: Int(process.terminationStatus), stdout: stdout, stderr: stderr)
+        } onCancel: {
+            terminateProcessTree(process)
+            try? stdoutPipe.fileHandleForReading.close()
+            try? stderrPipe.fileHandleForReading.close()
+        }
+    } catch {
+        if process.isRunning {
+            terminateProcessTree(process)
+            process.waitUntilExit()
+        }
+        try? stdoutPipe.fileHandleForReading.close()
+        try? stderrPipe.fileHandleForReading.close()
+        _ = await stdoutTask.value
+        _ = await stderrTask.value
+        throw error
     }
 }
 

@@ -111,16 +111,16 @@ TOPICS: dict[str, dict[str, Any]] = {
     },
     "package-release": {
         "title": "Release package gate",
-        "summary": "Release zips must be produced by bin/xcode package zip and pass bin/xcode package audit. Finder-created zips are not acceptable.",
+        "summary": "Release zips must be produced from freshly built staged binaries by bin/xcode release verify. Finder-created zips are not acceptable.",
         "commands": [
-            "bin/xcode package zip --output /tmp/xcode-plugin.zip --json",
+            "bin/xcode release verify --output /tmp/xcode-plugin.zip --json",
             "bin/xcode package audit --zip /tmp/xcode-plugin.zip --json",
         ],
         "next_actions": [
-            "Reject archives containing __MACOSX, .DS_Store, __pycache__, .pytest_cache, .codex/xcode/artifacts, build output, or missing package-manifest.json.",
-            "Run scripts/release_gate.sh before publishing.",
+            "Require clean source, fresh component self-tests, provenance, normalized hashes and modes, extracted smoke, and deterministic archive equality.",
+            "Use --allow-dirty only for explicitly labeled development packages; production verification rejects dirty source.",
         ],
-        "source_docs": ["docs/validation.md"],
+        "source_docs": ["docs/validation.md", "docs/release-notes-v0.6.md"],
     },
 }
 

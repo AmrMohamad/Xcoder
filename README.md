@@ -102,12 +102,15 @@ The MCP server remains a Codex-managed stdio child process, not a daemon. It dra
 
 Xcoder includes a typed Xcode menu-control layer for safe UI actions. `bin/xcode ide menu-catalog --json` lists stable `action_id` values, shortcuts, safety classes, and blocked dynamic/external-effect entries. `bin/xcode ide menu-perform --action-id <id> --json` executes only cataloged, implemented actions; it never accepts raw menu paths or arbitrary Accessibility selectors, and destructive actions require an explicit destructive flag.
 
-For v0.5.0 packages:
+For a verified v0.6.0 release package:
 
 ```bash
-bin/xcode package zip --output /tmp/xcode-plugin-0.5.0.zip --json
-bin/xcode package audit --zip /tmp/xcode-plugin-0.5.0.zip --json
+bin/xcode release verify --output /tmp/xcode-plugin-0.6.0.zip --json
 ```
+
+The release verifier freshly builds and self-tests both native components,
+stages an immutable package tree, records provenance, audits extracted
+behavior, and proves deterministic archive bytes with a second ZIP.
 
 ## What It Provides
 
@@ -118,9 +121,10 @@ bin/xcode package audit --zip /tmp/xcode-plugin-0.5.0.zip --json
 - `xcode-warning-audit`: xcodebuild warning and error summaries.
 - `xcode-doctor`: local Xcode/toolchain/plugin checks.
 - `xcode-ide-automation`: AppleScript/JXA control of the open Xcode app for IDE-specific actions.
-- `xcode-native-helper` / `XcodeNativeHelper.app`: optional Swift helper for Xcode process state, installed Xcode discovery, permission status, workspace opening, and read-only AX window/modal inspection. Accessibility-sensitive commands launch the bundled app through LaunchServices so TCC evaluates the helper bundle rather than Codex's internal parent process.
+- `xcode-native-helper` / `XcodeNativeHelper.app`: optional Swift helper for Xcode process state, installed Xcode discovery, permission status, workspace opening, AX inspection, and narrowly guarded typed menu/button/control mutation. It never exposes raw AX selectors through MCP. Accessibility-sensitive commands launch the bundled app through LaunchServices so TCC evaluates the helper bundle rather than Codex's internal parent process.
 - `xcode-mcp-server`: bundled Swift MCP stdio server exposing typed tools that call `bin/xcode`, including IDE status, workspace, scheme, destination, typed menu control, test, distribution, and help tools.
 - `xcode-workflows`: GUI-first guidance for choosing IDE, native helper, simulator, results, warnings, doctor, or CLI fallback flows.
+- `xcode-release`: fresh binary staging, provenance, deterministic packaging, and extracted release verification.
 
 ## Contract
 

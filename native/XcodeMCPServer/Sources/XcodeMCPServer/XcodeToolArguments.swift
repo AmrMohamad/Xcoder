@@ -183,11 +183,11 @@ enum XcodeToolArguments {
                 "--project-path", try ArgumentValues.requiredString(arguments["project_path"], key: "project_path"),
                 "--scheme", try ArgumentValues.requiredString(arguments["scheme"], key: "scheme"),
                 "--simulator-name", ArgumentValues.string(arguments["simulator_name"], default: "iPhone SE (3rd generation)"),
-                "--configuration", ArgumentValues.string(arguments["configuration"], default: "Debug"),
                 "--timeout-seconds", String(ArgumentValues.int(arguments["timeout_seconds"], default: 900))
             ]
             ArgumentValues.appendOptionalString(arguments["runtime"], flag: "--runtime", to: &argv)
             ArgumentValues.appendOptionalString(arguments["destination_id"], flag: "--destination-id", to: &argv)
+            ArgumentValues.appendOptionalString(arguments["configuration"], flag: "--configuration", to: &argv)
             if !ArgumentValues.bool(arguments["allow_cli_fallback"], default: true) {
                 argv.append("--no-cli-fallback")
             }
@@ -207,51 +207,20 @@ enum XcodeToolArguments {
             argv.append("--json")
             return argv
         case "xcode_export_archive":
-            var argv = [
-                "distribution", "export-archive",
-                "--archive-path", try ArgumentValues.requiredString(arguments["archive_path"], key: "archive_path"),
-                "--export-method", try ArgumentValues.requiredString(arguments["export_method"], key: "export_method"),
-                "--export-path", try ArgumentValues.requiredString(arguments["export_path"], key: "export_path"),
-                "--timeout-seconds", String(ArgumentValues.int(arguments["timeout_seconds"], default: 1800))
-            ]
-            ArgumentValues.appendOptionalString(arguments["team_id"], flag: "--team-id", to: &argv)
-            ArgumentValues.appendOptionalString(arguments["signing_style"], flag: "--signing-style", to: &argv)
-            try ArgumentValues.appendOptionalStringOrJSON(arguments["export_options"], flag: "--export-options", key: "export_options", to: &argv)
-            appendDistributionModeFlags(arguments, to: &argv)
+            var argv = ["distribution", "export-archive"]
+            ArgumentValues.appendOptionalString(arguments["archive_path"], flag: "--archive-path", to: &argv)
             argv.append("--json")
             return argv
         case "xcode_upload_archive":
-            var argv = [
-                "distribution", "upload-archive",
-                "--timeout-seconds", String(ArgumentValues.int(arguments["timeout_seconds"], default: 1800))
-            ]
+            var argv = ["distribution", "upload-archive"]
             ArgumentValues.appendOptionalString(arguments["ipa_path"], flag: "--ipa-path", to: &argv)
             ArgumentValues.appendOptionalString(arguments["archive_path"], flag: "--archive-path", to: &argv)
-            ArgumentValues.appendOptionalString(arguments["provider"], flag: "--provider", to: &argv)
-            ArgumentValues.appendOptionalString(arguments["api_key_id"], flag: "--api-key-id", to: &argv)
-            ArgumentValues.appendOptionalString(arguments["issuer_id"], flag: "--issuer-id", to: &argv)
-            ArgumentValues.appendOptionalString(arguments["api_key_path"], flag: "--api-key-path", to: &argv)
-            ArgumentValues.appendOptionalString(arguments["api_key_env"], flag: "--api-key-env", to: &argv)
-            appendDistributionModeFlags(arguments, to: &argv)
             argv.append("--json")
             return argv
         case "xcode_distribute":
-            var argv = [
-                "distribution", "distribute",
-                "--workspace-path", try ArgumentValues.requiredString(arguments["workspace_path"], key: "workspace_path"),
-                "--scheme", try ArgumentValues.requiredString(arguments["scheme"], key: "scheme"),
-                "--export-method", try ArgumentValues.requiredString(arguments["export_method"], key: "export_method"),
-                "--destination-channel", try ArgumentValues.requiredString(arguments["destination_channel"], key: "destination_channel"),
-                "--team-id", try ArgumentValues.requiredString(arguments["team_id"], key: "team_id"),
-                "--configuration", ArgumentValues.string(arguments["configuration"], default: "Release"),
-                "--destination", ArgumentValues.string(arguments["destination"], default: "generic/platform=iOS"),
-                "--timeout-seconds", String(ArgumentValues.int(arguments["timeout_seconds"], default: 5400))
-            ]
-            try ArgumentValues.appendOptionalStringOrJSON(arguments["credentials_ref"], flag: "--credentials-ref", key: "credentials_ref", to: &argv)
-            ArgumentValues.appendOptionalString(arguments["archive_path"], flag: "--archive-path", to: &argv)
-            ArgumentValues.appendOptionalString(arguments["export_path"], flag: "--export-path", to: &argv)
-            ArgumentValues.appendOptionalString(arguments["signing_style"], flag: "--signing-style", to: &argv)
-            appendDistributionModeFlags(arguments, to: &argv)
+            var argv = ["distribution", "distribute"]
+            ArgumentValues.appendOptionalString(arguments["workspace_path"], flag: "--workspace-path", to: &argv)
+            ArgumentValues.appendOptionalString(arguments["scheme"], flag: "--scheme", to: &argv)
             argv.append("--json")
             return argv
         case "xcode_simulator_resolve":

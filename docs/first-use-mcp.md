@@ -170,7 +170,7 @@ PY
 
 ```toml
 [mcp_servers.xcode]
-command = "/absolute/path/to/xcode/0.5.0/bin/xcode-mcp"
+command = "/absolute/path/to/xcode/0.6.0/bin/xcode-mcp"
 args = ["--stdio"]
 enabled = true
 ```

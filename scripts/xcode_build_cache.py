@@ -120,7 +120,22 @@ def main() -> int:
             elapsed_seconds=elapsed,
         )
 
-    if completed.returncode == EXIT_CODES["command_timeout"]:
+    stderr_text = stderr_path.read_text(encoding="utf-8", errors="replace").strip()
+    typed_cache_error = next(
+        (
+            candidate
+            for candidate in (
+                "cache_identity_mismatch",
+                "cache_metadata_corrupt",
+                "cache_lock_timeout",
+            )
+            if f"error: {candidate}:" in stderr_text
+        ),
+        None,
+    )
+    if typed_cache_error is not None:
+        error_type = typed_cache_error
+    elif completed.returncode == EXIT_CODES["command_timeout"]:
         error_type = "command_timeout"
     elif completed.returncode == EXIT_CODES["trusted_fast_denied"]:
         error_type = "trusted_fast_denied"
@@ -135,7 +150,7 @@ def main() -> int:
         details=details,
         artifacts=artifacts,
         warnings=warnings,
-        errors=[f"runner exited {completed.returncode}", stderr_path.read_text(encoding="utf-8", errors="replace").strip()],
+        errors=[f"runner exited {completed.returncode}", stderr_text],
         next_actions=[
             "Open stderr_log for the xcodebuild diagnostic.",
             "Use xcode context to inspect scheme testability and destination guidance.",

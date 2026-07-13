@@ -13,6 +13,7 @@ from xcode_common import EXIT_CODES, emit_failure, emit_success, plugin_identity
 
 COMMAND_TO_SCRIPT = {
     "build": "xcode_build_cache.py",
+    "cache": "xcode_cache.py",
     "doctor": "xcode_doctor.py",
     "help": "xcode_help.py",
     "ide": "xcode_ide_automation.py",
@@ -25,6 +26,8 @@ COMMAND_TO_SCRIPT = {
     "package": "xcode_package.py",
     "workflow": "xcode_workflow.py",
     "distribution": "xcode_distribution.py",
+    "build-components": "xcode_component_build.py",
+    "release": "xcode_release.py",
 }
 
 MCP_SUBCOMMAND_TO_ARGS = {

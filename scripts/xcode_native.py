@@ -10,6 +10,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+from xcode_native_capabilities import capability_report
 from xcode_common import (
     EXIT_CODES,
     compact_output,
@@ -21,6 +22,7 @@ from xcode_common import (
     native_helper_path,
     normalize_path,
     plugin_root,
+    plugin_version,
     redacted_home_path,
     run_command,
 )
@@ -204,6 +206,7 @@ def active_codesign_target() -> Path:
 
 
 def helper_bundle_info(identifier: str) -> dict[str, Any]:
+    version = plugin_version()
     return {
         "CFBundleDevelopmentRegion": "en",
         "CFBundleDisplayName": HELPER_APP_DISPLAY_NAME,
@@ -212,8 +215,8 @@ def helper_bundle_info(identifier: str) -> dict[str, Any]:
         "CFBundleInfoDictionaryVersion": "6.0",
         "CFBundleName": "XcodeNativeHelper",
         "CFBundlePackageType": "APPL",
-        "CFBundleShortVersionString": "0.3.0",
-        "CFBundleVersion": "0.3.0",
+        "CFBundleShortVersionString": version,
+        "CFBundleVersion": version,
         "LSMinimumSystemVersion": "14.0",
         "LSUIElement": True,
     }
@@ -314,6 +317,7 @@ def helper_identity_command(path: Path) -> int:
         "bundled": native_helper_bundle_path().exists(),
         "codesign": identity,
         "tcc_stable": bool(identity.get("team_identifier")) and not bool(identity.get("adhoc")),
+        "capabilities": capability_report(),
     }
     warnings: list[str] = []
     next_actions: list[str] = []

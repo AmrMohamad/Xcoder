@@ -13,7 +13,7 @@ final class XcodeToolCatalogTests: XCTestCase {
             XCTAssertNotNil(definition.annotations.readOnlyHint, definition.name)
             XCTAssertNotNil(definition.annotations.destructiveHint, definition.name)
             XCTAssertNotNil(definition.annotations.idempotentHint, definition.name)
-            XCTAssertEqual(definition.annotations.openWorldHint, false, definition.name)
+            XCTAssertNotNil(definition.annotations.openWorldHint, definition.name)
         }
     }
 
@@ -45,15 +45,12 @@ final class XcodeToolCatalogTests: XCTestCase {
             XCTAssertEqual(annotations.idempotentHint, true, name)
         }
 
-        let mutatingTools = [
+        let stateChangingTools = [
             "xcode_ide_build",
             "xcode_ide_test",
             "xcode_ide_run",
             "xcode_run_app",
             "xcode_archive",
-            "xcode_export_archive",
-            "xcode_upload_archive",
-            "xcode_distribute",
             "xcode_ide_menu_perform",
             "xcode_organizer_open",
             "xcode_organizer_press",
@@ -63,11 +60,19 @@ final class XcodeToolCatalogTests: XCTestCase {
             "xcode_organizer_distribution_select_custom_route",
             "xcode_organizer_distribution_probe_custom_route"
         ]
-        for name in mutatingTools {
+        for name in stateChangingTools {
+            let annotations = try! XCTUnwrap(XcodeToolCatalog.byName[name]?.annotations)
+            XCTAssertEqual(annotations.readOnlyHint, false, name)
+            XCTAssertEqual(annotations.destructiveHint, false, name)
+            XCTAssertEqual(annotations.idempotentHint, false, name)
+            XCTAssertEqual(XcodeToolCatalog.byName[name]?.safety, .stateChange, name)
+        }
+
+        for name in ["xcode_export_archive", "xcode_upload_archive", "xcode_distribute"] {
             let annotations = try! XCTUnwrap(XcodeToolCatalog.byName[name]?.annotations)
             XCTAssertEqual(annotations.readOnlyHint, false, name)
             XCTAssertEqual(annotations.destructiveHint, true, name)
-            XCTAssertEqual(annotations.idempotentHint, false, name)
+            XCTAssertEqual(XcodeToolCatalog.byName[name]?.safety, .externalEffect, name)
         }
 
         for name in ["xcode_native_permissions_request", "xcode_native_helper_bundle"] {
@@ -87,10 +92,10 @@ final class XcodeToolCatalogTests: XCTestCase {
         XCTAssertEqual(enumValues(helpSchema["topic"]), XcodeToolCatalog.helpTopics)
 
         let exportSchema = try properties(for: "xcode_export_archive")
-        XCTAssertEqual(enumValues(exportSchema["signing_style"]), ["automatic", "manual"])
+        XCTAssertNil(exportSchema["signing_style"])
 
         let distributeSchema = try properties(for: "xcode_distribute")
-        XCTAssertEqual(enumValues(distributeSchema["destination_channel"]), ["testflight", "app-store-connect"])
+        XCTAssertNil(distributeSchema["destination_channel"])
 
         let organizerSelectSchema = try properties(for: "xcode_organizer_distribution_select_method")
         XCTAssertEqual(enumValues(organizerSelectSchema["method"]), ["App Store Connect", "TestFlight Internal Only", "Release Testing", "Enterprise", "Debugging", "Custom"])
@@ -149,7 +154,7 @@ final class XcodeToolCatalogTests: XCTestCase {
         guard case .object(let timeoutSchema)? = schema["timeout_seconds"] else {
             return XCTFail("xcode_ide_run timeout_seconds schema missing")
         }
-        XCTAssertEqual(timeoutSchema["default"]?.intValue, 95)
+        XCTAssertEqual(timeoutSchema["default"]?.intValue, XcodeMCPTimeouts.ideRunActionSeconds)
         XCTAssertTrue(timeoutSchema["description"]?.stringValue?.contains("capped") == true)
     }
 

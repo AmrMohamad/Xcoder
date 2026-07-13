@@ -60,8 +60,9 @@ flowchart TB
     Allowed --> A4["Activate Xcode best-effort"]
     Allowed --> A5["Open .xcodeproj/.xcworkspace"]
     Allowed --> A6["Read-only top-level AX windows/sheets"]
+    Allowed --> A7["Guarded typed AX menu/button/control press"]
 
-    Forbidden --> F1["No AXPress"]
+    Forbidden --> F1["No raw MCP AX selectors"]
     Forbidden --> F2["No keyboard or mouse synthesis"]
     Forbidden --> F3["No scheme/destination selection"]
     Forbidden --> F4["No xcodebuild/simctl/xcresulttool wrappers"]
@@ -108,7 +109,7 @@ xcode_help
 
 The server is intentionally thin. It validates typed arguments, rejects free-form execution keys such as `command`, `shell`, `args`, `script`, and `raw`, runs `bin/xcode` through `Process` direct argv, enforces MCP-side timeouts, and returns the existing `xcode-plugin.v0.3` envelope as JSON text. Tool annotations mark read-only discovery/help tools separately from mutating build/test/run/menu workflows, but the annotations are hints only. It must not call Apple developer tools directly.
 
-Typed menu control is catalog-based, not raw UI execution. `xcode_ide_menu_catalog` returns stable `action_id` values and safety classes for visible Xcode menu actions. `xcode_ide_menu_perform` maps only to `bin/xcode ide menu-perform --action-id ...`; Python resolves that id through the static catalog, runs native/AX preflight, and presses the cataloged menu item with System Events. The native helper remains read-only and never performs AXPress.
+Typed menu control is catalog-based, not raw UI execution. `xcode_ide_menu_catalog` returns stable `action_id` values and safety classes for visible Xcode menu actions. `xcode_ide_menu_perform` maps only to `bin/xcode ide menu-perform --action-id ...`; Python resolves that id through the static catalog and runs native/AX preflight. The native helper owns read-only observation plus guarded `AXPress` primitives for pre-resolved menu paths and uniquely matched typed controls. Public MCP never accepts arbitrary AX paths, roles, or coordinates.
 
 The MCP server remains a Codex-managed stdio child process, not a daemon or warm background service. It intentionally avoids preloading Xcode/AppKit/simulator state so idle RSS stays low. During tool calls, stdout/stderr are drained while the child process runs, and active `bin/xcode` descendants are terminated on timeout or MCP server shutdown. The running server publishes a tiny temp-file health snapshot for `bin/xcode mcp health --json`; it does not expose health as an MCP tool.
 

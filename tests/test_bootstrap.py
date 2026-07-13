@@ -18,9 +18,7 @@ EXPECTED_STEP_NAMES = [
     "host-macos-version",
     "xcode-select",
     "swift-version",
-    "swift-package-resolve",
-    "swift-build-release",
-    "install-mcp-server",
+    "fresh-component-build",
     "mcp-version",
     "mcp-doctor",
     "mcp-list-tools",
@@ -105,7 +103,7 @@ def test_bootstrap_failure_includes_failed_step_artifacts_and_recovery(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    configure_bootstrap_test(monkeypatch, tmp_path, fail_step="swift-build-release")
+    configure_bootstrap_test(monkeypatch, tmp_path, fail_step="fresh-component-build")
 
     assert xcode_bootstrap.main() == 2
     payload = parse_envelope(capsys.readouterr().out)
@@ -116,8 +114,8 @@ def test_bootstrap_failure_includes_failed_step_artifacts_and_recovery(
     assert payload["error_type"] == "mcp_bootstrap_failed"
     assert payload["details"]["recovery"] == "environment"
     assert payload["errors"][0]["recovery"] == "environment"
-    assert step_names == EXPECTED_STEP_NAMES[: EXPECTED_STEP_NAMES.index("swift-build-release") + 1]
-    assert failed_step["name"] == "swift-build-release"
+    assert step_names == EXPECTED_STEP_NAMES[: EXPECTED_STEP_NAMES.index("fresh-component-build") + 1]
+    assert failed_step["name"] == "fresh-component-build"
     assert failed_step["ok"] is False
     assert Path(failed_step["artifacts"]["stdout"]).exists()
     assert Path(failed_step["artifacts"]["stderr"]).exists()
