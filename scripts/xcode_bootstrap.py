@@ -123,9 +123,21 @@ def main() -> int:
             )
         step("xcode-select", ["/usr/bin/xcode-select", "-p"], summary="xcode-select does not point at an available developer directory.", exit_code=2)
         step("swift-version", ["/usr/bin/swift", "--version"], summary="Swift toolchain is not available.", exit_code=2)
-        step("swift-package-resolve", ["/usr/bin/swift", "package", "resolve", "--package-path", str(root / "native" / "XcodeMCPServer")], summary="SwiftPM could not resolve the bundled MCP server package.", exit_code=2, timeout_seconds=300)
-        step("swift-build-release", ["/usr/bin/swift", "build", "-c", "release", "--package-path", str(root / "native" / "XcodeMCPServer")], summary="SwiftPM could not build the bundled MCP server.", exit_code=2, timeout_seconds=900)
-        step("install-mcp-server", ["/usr/bin/install", "-m", "755", str(root / "native" / "XcodeMCPServer" / ".build" / "release" / "xcode-mcp-server"), str(exec_path)], summary="Could not install the MCP server binary into bin/.", exit_code=4)
+        step(
+            "fresh-component-build",
+            [
+                "/usr/bin/python3",
+                str(root / "scripts" / "xcode_component_build.py"),
+                "--component",
+                "mcp-server",
+                "--stage",
+                str(root),
+                "--json",
+            ],
+            summary="SwiftPM could not freshly build, install, and self-test the bundled MCP server.",
+            exit_code=2,
+            timeout_seconds=1200,
+        )
         step("mcp-version", [str(exec_path), "--version", "--json"], summary="Built MCP server did not return version JSON.", exit_code=60)
         step("mcp-doctor", [str(exec_path), "--doctor", "--json"], summary="Built MCP server self-doctor failed.", exit_code=60)
         step("mcp-list-tools", [str(exec_path), "--list-tools", "--json"], summary="Built MCP server did not list tools.", exit_code=60)

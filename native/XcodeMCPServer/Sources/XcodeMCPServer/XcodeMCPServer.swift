@@ -49,6 +49,8 @@ struct XcodeMCPServer {
                 return CallTool.Result(content: [.text(text: result.json, annotations: nil, _meta: nil)], isError: result.isError)
             } catch let error as XcodeToolError {
                 return CallTool.Result(content: [.text(text: error.envelopeJSON, annotations: nil, _meta: nil)], isError: true)
+            } catch is CancellationError {
+                throw CancellationError()
             } catch {
                 return CallTool.Result(
                     content: [.text(text: JSONEnvelope.failure(errorType: "native_helper_failed", summary: String(describing: error)), annotations: nil, _meta: nil)],

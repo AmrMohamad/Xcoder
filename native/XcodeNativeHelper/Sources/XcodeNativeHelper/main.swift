@@ -4,7 +4,7 @@ import ApplicationServices
 import Darwin
 
 let helperSchemaVersion = "xcode-native-helper.v0.1"
-let helperVersion = "0.3.0"
+let helperVersion = "0.6.0"
 let xcodeBundleIdentifier = "com.apple.dt.Xcode"
 
 struct NativeResponse {
@@ -51,7 +51,7 @@ struct NativeResponse {
                 "next_actions": []
             ]
             let fallbackData = (try? JSONSerialization.data(withJSONObject: fallbackPayload, options: [.sortedKeys]))
-                ?? Data("{\"schema_version\":\"xcode-native-helper.v0.1\",\"helper_version\":\"0.3.0\",\"ok\":false,\"command_name\":\"native-helper\",\"error_type\":\"native_helper_failed\",\"summary\":\"JSON serialization failed\",\"warnings\":[],\"errors\":[\"Native helper JSON serialization failed.\"],\"next_actions\":[]}".utf8)
+                ?? Data("{\"schema_version\":\"xcode-native-helper.v0.1\",\"helper_version\":\"0.6.0\",\"ok\":false,\"command_name\":\"native-helper\",\"error_type\":\"native_helper_failed\",\"summary\":\"JSON serialization failed\",\"warnings\":[],\"errors\":[\"Native helper JSON serialization failed.\"],\"next_actions\":[]}".utf8)
             let fallback = String(data: fallbackData, encoding: .utf8) ?? "{\"ok\":false,\"error_type\":\"native_helper_failed\"}"
             FileHandle.standardOutput.write(Data(fallback.utf8))
             FileHandle.standardOutput.write(Data("\n".utf8))
@@ -370,7 +370,7 @@ func pressXcodeMenu(path: [String]) -> Never {
             exitCode: 10
         )
     }
-    _ = app.activate(options: [.activateIgnoringOtherApps])
+    _ = app.activate()
     Thread.sleep(forTimeInterval: 0.2)
 
     let appElement = AXUIElementCreateApplication(app.processIdentifier)

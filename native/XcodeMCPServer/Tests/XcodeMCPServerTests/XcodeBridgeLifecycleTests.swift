@@ -17,14 +17,17 @@ final class XcodeBridgeLifecycleTests: XCTestCase {
 
         let bridge = XcodeBridge(
             paths: PluginPaths(executablePath: bin.appendingPathComponent("xcode-mcp-server").path),
-            registry: ActiveProcessRegistry()
+            registry: ActiveProcessRegistry(),
+            requestBudgetOverride: .milliseconds(300),
+            responseReserve: .milliseconds(20)
         )
 
         let result = try await bridge.callTool(name: "xcode_native_state", arguments: nil)
         XCTAssertFalse(result.isError)
         XCTAssertTrue(result.json.contains("\"error_type\":\"command_timeout\""))
         XCTAssertTrue(result.json.contains("\"tool_name\":\"xcode_native_state\""))
-        XCTAssertTrue(result.json.contains("returned this envelope before the client protocol timeout"))
+        XCTAssertTrue(result.json.contains(#""timeout_stage":"execution""#))
+        XCTAssertTrue(result.json.contains("absolute deadline"))
     }
 
     func testQueuedCallCancellationDoesNotLeakQueueOrLaunchCancelledTool() async throws {

@@ -1,6 +1,6 @@
 ---
 name: xcode-native-helper
-description: Use the optional Swift native helper for fast Xcode process state, Accessibility permission status, workspace opening, and read-only Xcode window/modal inspection.
+description: Use the optional Swift native helper for fast Xcode process state, Accessibility permission status, workspace opening, AX inspection, and guarded typed menu/button/control mutation.
 ---
 
 # Xcode Native Helper

@@ -7,7 +7,7 @@ final class ServerHealthTests: XCTestCase {
         let registry = ActiveProcessRegistry()
         let payload = try decode(await ServerHealth.healthJSON(registry: registry, startedAt: Date()))
 
-        XCTAssertEqual(payload["schema_version"] as? String, "xcode-mcp-server.health.v0.1")
+        XCTAssertEqual(payload["schema_version"] as? String, XcodeMCPConstants.healthSchemaVersion)
         XCTAssertEqual(payload["server"] as? String, XcodeMCPConstants.serverName)
         XCTAssertEqual(payload["version"] as? String, XcodeMCPConstants.serverVersion)
         XCTAssertEqual(payload["tool_running"] as? Bool, false)
@@ -32,7 +32,8 @@ final class ServerHealthTests: XCTestCase {
         let payload = try decode(await ServerHealth.healthJSON(registry: registry, startedAt: Date()))
         XCTAssertNotNil(payload["active_child_pid"] as? Int)
         XCTAssertNotNil(payload["active_child_started_at"] as? String)
-        XCTAssertNotNil(payload["active_child_argv_summary"] as? [String])
+        XCTAssertNotNil(payload["active_operation_id"] as? String)
+        XCTAssertNil(payload["active_child_argv_summary"])
 
         _ = try await task.value
     }
@@ -67,14 +68,16 @@ final class ServerHealthTests: XCTestCase {
     func testPublishedHealthFallsBackWhenStateIsStale() async throws {
         let stateURL = temporaryDirectory().appendingPathComponent("health.json")
         let stalePayload: [String: Any] = [
-            "schema_version": "xcode-mcp-server.health.v0.1",
+            "schema_version": XcodeMCPConstants.healthSchemaVersion,
             "server": XcodeMCPConstants.serverName,
             "version": XcodeMCPConstants.serverVersion,
+            "instance_id": UUID().uuidString,
             "pid": Int(ProcessInfo.processInfo.processIdentifier),
             "state_updated_at_epoch": Date().addingTimeInterval(-60).timeIntervalSince1970
         ]
         let data = try JSONSerialization.data(withJSONObject: stalePayload)
         try data.write(to: stateURL)
+        try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: stateURL.path)
 
         let payload = try decode(await ServerHealth.publishedOrProbeHealthJSON(stateURL: stateURL))
         XCTAssertEqual(payload["health_source"] as? String, "self_probe")

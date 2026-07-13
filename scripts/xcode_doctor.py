@@ -9,6 +9,7 @@ import platform
 from pathlib import Path
 from typing import Any
 
+from xcode_native_capabilities import capability_report
 from xcode_common import (
     EXIT_CODES,
     compact_output,
@@ -460,6 +461,7 @@ def main() -> int:
 
     add_native_helper_checks(checks, warnings, xcode_app)
     add_mcp_server_checks(checks, warnings)
+    add_check(checks, name="native-helper-capabilities", status="ok", **capability_report())
 
     failed = [item["name"] for item in checks if item["status"] == "failed"]
     details = {
@@ -468,6 +470,7 @@ def main() -> int:
         "requested_checks": requested_checks,
         "selected_developer_dir": developer_dir,
         "selected_xcode_app": xcode_app,
+        "native_helper_capabilities": capability_report(),
     }
     if failed:
         return emit_failure(

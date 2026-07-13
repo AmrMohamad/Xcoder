@@ -64,6 +64,22 @@ final class XcodeToolArgumentsTests: XCTestCase {
         )
     }
 
+    func testRunAppConfigurationIsOnlyForwardedWhenExplicitlyProvided() throws {
+        let required: [String: Value] = [
+            "project_path": .string("/tmp/App.xcodeproj"),
+            "scheme": .string("App")
+        ]
+        let defaultArguments = try XcodeToolArguments.argv(for: "xcode_run_app", arguments: required)
+        XCTAssertFalse(defaultArguments.contains("--configuration"))
+
+        let explicitArguments = try XcodeToolArguments.argv(
+            for: "xcode_run_app",
+            arguments: required.merging(["configuration": .string("Release")]) { _, new in new }
+        )
+        let configurationIndex = try XCTUnwrap(explicitArguments.firstIndex(of: "--configuration"))
+        XCTAssertEqual(explicitArguments[configurationIndex + 1], "Release")
+    }
+
     func testIdeTestMapsToFixedSchemeAction() throws {
         let argv = try XcodeToolArguments.argv(
             for: "xcode_ide_test",
@@ -105,7 +121,7 @@ final class XcodeToolArgumentsTests: XCTestCase {
                 "--action", "run",
                 "--workspace-path", "/tmp/App.xcodeproj",
                 "--scheme", "App",
-                "--timeout-seconds", "95",
+                "--timeout-seconds", String(XcodeMCPTimeouts.ideRunActionSeconds),
                 "--destination-name", "iPhone SE (3rd generation)",
                 "--json"
             ]
@@ -135,7 +151,10 @@ final class XcodeToolArgumentsTests: XCTestCase {
             ]
         )
 
-        XCTAssertEqual(argv.dropFirst(8).prefix(2), ["--timeout-seconds", "95"])
+        XCTAssertEqual(
+            argv.dropFirst(8).prefix(2),
+            ["--timeout-seconds", String(XcodeMCPTimeouts.ideRunActionSeconds)]
+        )
     }
 
     func testReadOnlyIdeDiscoveryMappings() throws {
@@ -256,22 +275,11 @@ final class XcodeToolArgumentsTests: XCTestCase {
         XCTAssertEqual(
             try XcodeToolArguments.argv(
                 for: "xcode_export_archive",
-                arguments: [
-                    "archive_path": .string("/tmp/App.xcarchive"),
-                    "export_method": .string("app-store-connect"),
-                    "team_id": .string("ABCDE12345"),
-                    "export_path": .string("/tmp/export"),
-                    "export_options": .object(["stripSwiftSymbols": .bool(true)])
-                ]
+                arguments: ["archive_path": .string("/tmp/App.xcarchive")]
             ),
             [
                 "distribution", "export-archive",
                 "--archive-path", "/tmp/App.xcarchive",
-                "--export-method", "app-store-connect",
-                "--export-path", "/tmp/export",
-                "--timeout-seconds", "1800",
-                "--team-id", "ABCDE12345",
-                "--export-options", "{\"stripSwiftSymbols\":true}",
                 "--json"
             ]
         )
@@ -282,53 +290,39 @@ final class XcodeToolArgumentsTests: XCTestCase {
                 arguments: [
                     "ipa_path": .string("/tmp/App.ipa"),
                     "api_key_id": .string("KEY123"),
-                    "issuer_id": .string("ISSUER123"),
-                    "api_key_env": .string("ASC_KEY_PATH"),
-                    "preflight_only": .bool(true)
+                    "issuer_id": .string("ISSUER123")
                 ]
             ),
             [
                 "distribution", "upload-archive",
-                "--timeout-seconds", "1800",
                 "--ipa-path", "/tmp/App.ipa",
-                "--api-key-id", "KEY123",
-                "--issuer-id", "ISSUER123",
-                "--api-key-env", "ASC_KEY_PATH",
-                "--preflight-only",
                 "--json"
             ]
         )
     }
 
-    func testDistributeAcceptsCredentialsObject() throws {
+    func testDistributeNeverForwardsCredentials() throws {
         let argv = try XcodeToolArguments.argv(
             for: "xcode_distribute",
             arguments: [
                 "workspace_path": .string("/tmp/App.xcworkspace"),
                 "scheme": .string("App"),
-                "export_method": .string("app-store-connect"),
-                "destination_channel": .string("testflight"),
-                "team_id": .string("ABCDE12345"),
                 "credentials_ref": .object([
                     "api_key_id": .string("KEY123"),
                     "issuer_id": .string("ISSUER123"),
                     "api_key_env": .string("ASC_KEY_PATH")
-                ]),
-                "dry_run": .bool(true)
+                ])
             ]
         )
 
-        XCTAssertEqual(argv.prefix(12), [
+        XCTAssertEqual(argv, [
             "distribution", "distribute",
             "--workspace-path", "/tmp/App.xcworkspace",
             "--scheme", "App",
-            "--export-method", "app-store-connect",
-            "--destination-channel", "testflight",
-            "--team-id", "ABCDE12345"
+            "--json"
         ])
-        XCTAssertTrue(argv.contains("--credentials-ref"))
-        XCTAssertTrue(argv.contains("{\"api_key_env\":\"ASC_KEY_PATH\",\"api_key_id\":\"KEY123\",\"issuer_id\":\"ISSUER123\"}"))
-        XCTAssertTrue(argv.contains("--dry-run"))
+        XCTAssertFalse(argv.joined(separator: " ").contains("KEY123"))
+        XCTAssertFalse(argv.joined(separator: " ").contains("ISSUER123"))
     }
 
     func testMissingRequiredIdeTestArgumentsThrowsUsage() {

@@ -1,11 +1,32 @@
 import MCP
 
+enum XcodeToolSafety: String, Sendable, Equatable {
+    case readOnly
+    case stateChange
+    case destructive
+    case permissionPrompt
+    case externalEffect
+
+    init(name: String, annotations: Tool.Annotations) {
+        if annotations.readOnlyHint == true {
+            self = .readOnly
+        } else if ["xcode_export_archive", "xcode_upload_archive", "xcode_distribute"].contains(name) {
+            self = .externalEffect
+        } else if ["xcode_native_helper_bundle", "xcode_native_permissions_request"].contains(name) {
+            self = .permissionPrompt
+        } else {
+            self = .stateChange
+        }
+    }
+}
+
 struct XcodeToolDefinition {
     let name: String
     let description: String
     let timeoutSeconds: Int
     let inputSchema: Value
     let annotations: Tool.Annotations
+    var safety: XcodeToolSafety { XcodeToolSafety(name: name, annotations: annotations) }
 }
 
 enum XcodeToolCatalog {
@@ -323,7 +344,7 @@ enum XcodeToolCatalog {
                     "destination_id": stringSchema(description: "Optional simulator/device identifier."),
                     "destination_name": stringSchema(description: "Optional Xcode destination name."),
                     "require_native_preflight": boolSchema(description: "Fail if native AX window/modal inspection is unavailable. Defaults to false so missing Accessibility permission warns instead of blocking the IDE action.", defaultValue: false),
-                    "timeout_seconds": intSchema(description: "IDE run poll timeout in seconds. Values above 95 are capped so the MCP call returns before Codex's protocol timeout.", defaultValue: XcodeMCPTimeouts.ideRunActionSeconds)
+                    "timeout_seconds": intSchema(description: "IDE run poll timeout in seconds. Values above \(XcodeMCPTimeouts.ideRunActionSeconds) are capped so the MCP call returns before Codex's protocol timeout.", defaultValue: XcodeMCPTimeouts.ideRunActionSeconds)
                 ],
                 required: ["workspace_path", "scheme"]
             ),
@@ -340,7 +361,7 @@ enum XcodeToolCatalog {
                     "simulator_name": stringSchema(description: "Simulator name to resolve when destination_id is not provided.", defaultValue: "iPhone SE (3rd generation)"),
                     "runtime": stringSchema(description: "Optional runtime like iOS 18.5."),
                     "destination_id": stringSchema(description: "Optional simulator UDID; preferred when known."),
-                    "configuration": stringSchema(description: "Build configuration.", defaultValue: "Debug"),
+                    "configuration": stringSchema(description: "Optional explicit configuration. The GUI workflow rejects it unless scheme-action parity can be proven."),
                     "allow_cli_fallback": boolSchema(description: "Allow plugin-routed CLI fallback when GUI path fails.", defaultValue: true),
                     "timeout_seconds": intSchema(description: "End-to-end workflow timeout in seconds.", defaultValue: 900)
                 ],
@@ -373,19 +394,10 @@ enum XcodeToolCatalog {
             timeoutSeconds: XcodeMCPTimeouts.protocolSafeToolSeconds,
             inputSchema: objectSchema(
                 properties: [
-                    "archive_path": stringSchema(description: "Path to the .xcarchive."),
-                    "export_method": stringSchema(description: "Export method, such as app-store-connect, ad-hoc, enterprise, or development."),
-                    "team_id": stringSchema(description: "Apple Developer Team ID. Redacted from output."),
-                    "signing_style": enumStringSchema(description: "Export signing style.", values: ["automatic", "manual"], defaultValue: "automatic", examples: ["automatic"]),
-                    "export_path": stringSchema(description: "Directory where the IPA should be exported."),
-                    "export_options": freeFormObjectSchema(description: "Additional ExportOptions.plist keys to merge before export."),
-                    "timeout_seconds": intSchema(description: "Export timeout in seconds for the plugin-routed command.", defaultValue: 1800),
-                    "dry_run": boolSchema(description: "Validate export options and return the export plan without exporting.", defaultValue: false),
-                    "preflight_only": boolSchema(description: "Alias for dry-run style export preflight.", defaultValue: false)
-                ],
-                required: ["archive_path", "export_method", "export_path"]
+                    "archive_path": stringSchema(description: "Optional .xcarchive context for the typed blocked result.")
+                ]
             ),
-            annotations: mutatingAnnotations
+            annotations: externalEffectAnnotations
         ),
         .init(
             name: "xcode_upload_archive",
@@ -393,20 +405,11 @@ enum XcodeToolCatalog {
             timeoutSeconds: XcodeMCPTimeouts.protocolSafeToolSeconds,
             inputSchema: objectSchema(
                 properties: [
-                    "ipa_path": stringSchema(description: "Path to an exported IPA. Required unless archive_path resolves to an IPA."),
-                    "archive_path": stringSchema(description: "Path used for metadata context or an exported directory containing an IPA."),
-                    "provider": stringSchema(description: "Optional App Store Connect provider short name."),
-                    "api_key_id": stringSchema(description: "App Store Connect API key id. Redacted from output."),
-                    "issuer_id": stringSchema(description: "App Store Connect issuer id. Redacted from output."),
-                    "api_key_path": stringSchema(description: "Path to the App Store Connect .p8 key. Redacted from output."),
-                    "api_key_env": stringSchema(description: "Environment variable whose value is the .p8 key path. Value is redacted."),
-                    "timeout_seconds": intSchema(description: "Upload timeout in seconds for the plugin-routed command.", defaultValue: 1800),
-                    "dry_run": boolSchema(description: "Validate upload inputs without contacting App Store Connect.", defaultValue: false),
-                    "preflight_only": boolSchema(description: "Alias for dry-run upload preflight.", defaultValue: false)
-                ],
-                required: ["api_key_id", "issuer_id"]
+                    "ipa_path": stringSchema(description: "Optional IPA context for the typed blocked result."),
+                    "archive_path": stringSchema(description: "Optional .xcarchive context for the typed blocked result.")
+                ]
             ),
-            annotations: mutatingAnnotations
+            annotations: externalEffectAnnotations
         ),
         .init(
             name: "xcode_distribute",
@@ -414,24 +417,11 @@ enum XcodeToolCatalog {
             timeoutSeconds: XcodeMCPTimeouts.protocolSafeToolSeconds,
             inputSchema: objectSchema(
                 properties: [
-                    "workspace_path": stringSchema(description: "Path to .xcworkspace or .xcodeproj."),
-                    "scheme": stringSchema(description: "Scheme to archive and distribute."),
-                    "export_method": stringSchema(description: "Export method, such as app-store-connect."),
-                    "destination_channel": enumStringSchema(description: "Distribution destination.", values: ["testflight", "app-store-connect"], defaultValue: "testflight", examples: ["testflight"]),
-                    "team_id": stringSchema(description: "Apple Developer Team ID. Redacted from output."),
-                    "credentials_ref": freeFormObjectSchema(description: "Credential reference object with provider, api_key_id, issuer_id, and api_key_path or api_key_env. Secret values are redacted."),
-                    "configuration": stringSchema(description: "Build configuration.", defaultValue: "Release"),
-                    "destination": stringSchema(description: "Archive destination.", defaultValue: "generic/platform=iOS"),
-                    "archive_path": stringSchema(description: "Optional output .xcarchive path."),
-                    "export_path": stringSchema(description: "Optional IPA export directory."),
-                    "signing_style": enumStringSchema(description: "Export signing style.", values: ["automatic", "manual"], defaultValue: "automatic", examples: ["automatic"]),
-                    "timeout_seconds": intSchema(description: "End-to-end timeout in seconds for each plugin-routed step.", defaultValue: 5400),
-                    "dry_run": boolSchema(description: "Run guarded preflight and return the plan without archive, export, or upload.", defaultValue: false),
-                    "preflight_only": boolSchema(description: "Run guarded preflight and stop before archive/export/upload.", defaultValue: false)
-                ],
-                required: ["workspace_path", "scheme", "export_method", "destination_channel", "team_id", "credentials_ref"]
+                    "workspace_path": stringSchema(description: "Optional workspace context for the typed blocked result."),
+                    "scheme": stringSchema(description: "Optional scheme context for the typed blocked result.")
+                ]
             ),
-            annotations: mutatingAnnotations
+            annotations: externalEffectAnnotations
         ),
         .init(
             name: "xcode_simulator_resolve",
@@ -514,6 +504,7 @@ enum XcodeToolCatalog {
                     "name": $0.name,
                     "description": $0.description,
                     "timeout_seconds": $0.timeoutSeconds,
+                    "safety": $0.safety.rawValue,
                     "annotations": annotationJSON($0.annotations)
                 ]
             }
@@ -529,9 +520,16 @@ enum XcodeToolCatalog {
 
     private static let mutatingAnnotations = Tool.Annotations(
         readOnlyHint: false,
-        destructiveHint: true,
+        destructiveHint: false,
         idempotentHint: false,
         openWorldHint: false
+    )
+
+    private static let externalEffectAnnotations = Tool.Annotations(
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: false,
+        openWorldHint: true
     )
 
     private static let permissionPromptAnnotations = Tool.Annotations(

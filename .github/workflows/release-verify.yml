@@ -1,0 +1,91 @@
+name: Release Verify
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Fresh macOS 26 release gate
+    runs-on: macos-26
+    timeout-minutes: 45
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Install release test dependency
+        run: python3 -m pip install pytest==9.1.1
+
+      - name: Verify release from the fresh checkout
+        run: |
+          set -o pipefail
+          artifact_dir="$RUNNER_TEMP/xcoder-release-artifacts"
+          mkdir -p "$artifact_dir"
+          version=$(python3 -c 'import json; print(json.load(open(".codex-plugin/plugin.json"))["version"])')
+          bin/xcode release verify \
+            --output "$artifact_dir/xcoder-$version.zip" \
+            --json | tee "$artifact_dir/release-verify.json"
+
+      - name: Upload release evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: xcoder-release-evidence
+          path: ${{ runner.temp }}/xcoder-release-artifacts/
+          if-no-files-found: error
+          retention-days: 14
+
+  minimum-supported-runtime:
+    name: Extracted package smoke on macOS 14
+    needs: verify
+    runs-on: macos-14
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out audit source
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Download verified release evidence
+        uses: actions/download-artifact@v8
+        with:
+          name: xcoder-release-evidence
+          path: ${{ runner.temp }}/xcoder-release-evidence
+
+      - name: Re-audit and smoke-test the package on macOS 14
+        run: |
+          set -o pipefail
+          evidence_dir="$RUNNER_TEMP/xcoder-release-evidence"
+          zip_path=$(find "$evidence_dir" -maxdepth 1 -name 'xcoder-*.zip' -print -quit)
+          test -n "$zip_path"
+          python3 scripts/xcode_package.py audit \
+            --zip "$zip_path" | tee "$evidence_dir/macos-14-audit.json"
+
+      - name: Upload minimum-runtime evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: xcoder-macos-14-evidence
+          path: ${{ runner.temp }}/xcoder-release-evidence/macos-14-audit.json
+          if-no-files-found: error
+          retention-days: 14

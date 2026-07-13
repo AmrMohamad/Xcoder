@@ -209,7 +209,7 @@ If `--workspace-path` is supplied, matching is strict. Xcoder should not fall ba
 
 ## Native State
 
-Use native helper commands for fast, read-only app state:
+Use native helper commands for fast app-state observation and only the documented typed mutation routes:
 
 ```bash
 bin/xcode native helper version --json

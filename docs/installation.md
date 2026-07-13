@@ -1,5 +1,10 @@
 # Installation
 
+Xcode Accessibility permission authorizes both observation and the guarded,
+typed mutation primitives documented in
+`docs/generated/native-capabilities.md`. Xcoder does not expose raw AX
+selectors or coordinate/keyboard input as public MCP operations.
+
 This plugin is designed to install through a Codex plugin marketplace, run from a local source checkout while developing, and package into a clean plugin zip.
 
 The repository root is the plugin root. It must contain `.codex-plugin/plugin.json`, `skills/`, `bin/xcode`, and the supporting scripts/assets.
@@ -86,7 +91,7 @@ Codex installs plugins into its plugin cache. For local development, prefer rein
 
 ```bash
 SOURCE="$(pwd)"
-CACHE="${CODEX_HOME:-$HOME/.codex}/plugins/cache/local/xcode/0.5.0"
+CACHE="${CODEX_HOME:-$HOME/.codex}/plugins/cache/local/xcode/0.6.0"
 
 mkdir -p "$CACHE"
 rsync -a --delete \
@@ -132,12 +137,11 @@ Run `native helper bundle` after every helper rebuild. It packages `bin/XcodeNat
 
 ## Bundled MCP Server
 
-Xcoder v0.5.0 ships a Swift stdio MCP server. Build it once and copy the release binary into `bin/`:
+Xcoder v0.6.0 ships a Swift stdio MCP server. Bootstrap uses the same fresh
+component builder as release packaging:
 
 ```bash
-swift build -c release --package-path native/XcodeMCPServer
-cp native/XcodeMCPServer/.build/release/xcode-mcp-server bin/xcode-mcp-server
-chmod +x bin/xcode-mcp bin/xcode-mcp-server
+bin/xcode mcp bootstrap --json
 bin/xcode-mcp-server --version --json
 bin/xcode-mcp-server --list-tools --json
 bin/xcode-mcp-server --doctor --json
@@ -149,20 +153,22 @@ The wrapper also enforces the macOS 14.0 minimum before it executes the Swift bi
 
 ## Package Install
 
-Create a clean zip from the repository root:
+Build and verify a release package from freshly built binaries:
 
 ```bash
-bin/xcode package zip --output /tmp/xcode-plugin-0.5.0.zip --json
-bin/xcode package audit --zip /tmp/xcode-plugin-0.5.0.zip --json
+bin/xcode release verify --output /tmp/xcode-plugin-0.6.0.zip --json
 ```
 
 The package command writes entries under:
 
 ```text
-xcode/0.5.0/
+xcode/0.6.0/
 ```
 
-The audit fails if the archive contains macOS metadata, Python caches, Swift `.build` output, local artifacts, nested zips, wrong root prefixes, missing package manifest, missing public binaries, or non-executable public binaries.
+The release audit verifies normalized paths and modes, every entry hash,
+binary provenance and versions, signatures and architectures, size and
+compression limits, secret/junk exclusions, extracted behavior, and a second
+byte-identical ZIP from the same staged tree.
 
 ## OpenAI Plugin Format Notes
 

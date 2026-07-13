@@ -19,7 +19,7 @@ final class JSONEnvelopeTests: XCTestCase {
     }
 
     func testTimeoutFailureIsRetryable() throws {
-        let envelope = try decode(XcodeToolError.timeout.envelopeJSON)
+        let envelope = try decode(XcodeToolError.timeout(.execution).envelopeJSON)
         let details = try XCTUnwrap(envelope["details"] as? [String: Any])
         XCTAssertEqual(details["recovery"] as? String, "retry")
         XCTAssertEqual(details["transient"] as? Bool, true)

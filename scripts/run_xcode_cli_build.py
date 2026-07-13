@@ -19,6 +19,18 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable
 
+from xcode_cache_identity import (
+    CACHE_IDENTITY_SCHEMA,
+    CacheLockTimeout,
+    CacheMetadataError,
+    build_cache_identity,
+    compare_cache_identity,
+    identity_digest,
+    identities_compatible,
+    read_cache_metadata,
+    write_cache_metadata_atomic,
+)
+
 
 ACTIONS = ("build", "test", "clean", "analyze", "build-for-testing", "test-without-building")
 PERFORMANCE_PROFILES = ("none", "balanced", "fast", "trusted-fast", "diagnostic")
@@ -420,7 +432,7 @@ def project_stem(args: argparse.Namespace) -> str:
 
 
 def stable_project_key(args: argparse.Namespace) -> str:
-    return f"{project_stem(args)}-{short_hash(json.dumps(cache_identity(args), sort_keys=True))}"
+    return f"{project_stem(args)}-{identity_digest(cache_identity(args))}"
 
 
 def xcode_version_for_cache() -> str:
@@ -441,14 +453,41 @@ def xcode_version_for_cache() -> str:
 def cache_identity(args: argparse.Namespace) -> dict[str, Any]:
     entry = entry_path(args)
     xctestrun_path = expand_path(args.xctestrun) if args.xctestrun else None
-    return {
-        "optimization_profile": args.optimization_profile,
-        "trusted_fast": args.optimization_profile == "trusted-fast",
-        "xcode_version": xcode_version_for_cache(),
-        "scheme": args.scheme,
-        "configuration": args.configuration,
-        "project_path_hash": short_hash(str(entry or xctestrun_path or Path.cwd())),
+    selected_entry = entry or xctestrun_path or Path.cwd().resolve(strict=True)
+    build_settings = {
+        key: value
+        for item in args.build_setting
+        if "=" in item
+        for key, value in [item.split("=", 1)]
     }
+    destination = destination_parts(args.destination[0]) if args.destination else {}
+    architectures = [
+        value
+        for value in re.split(r"[ ,]+", build_settings.get("ARCHS", os.uname().machine))
+        if value
+    ]
+    return build_cache_identity(
+        entry=selected_entry,
+        container_type=(
+            "xcworkspace"
+            if selected_entry.suffix == ".xcworkspace"
+            else "xcodeproj"
+            if selected_entry.suffix == ".xcodeproj"
+            else "xctestrun"
+        ),
+        scheme=args.scheme,
+        configuration=args.configuration,
+        sdk=args.sdk,
+        platform=destination.get("platform"),
+        architectures=architectures,
+        toolchain=build_settings.get("TOOLCHAINS", os.environ.get("TOOLCHAINS", "default")),
+        optimization_profile=args.optimization_profile,
+        trusted_fast=args.optimization_profile == "trusted-fast",
+        skip_macro_validation=should_skip_macro_validation(args),
+        skip_package_plugin_validation=should_skip_package_plugin_validation(args),
+        index_store_enabled=not should_disable_index_store(args),
+        xcode_version=xcode_version_for_cache(),
+    )
 
 
 def ensure_cache_metadata(path: Path | None, args: argparse.Namespace, *, create: bool) -> None:
@@ -458,16 +497,39 @@ def ensure_cache_metadata(path: Path | None, args: argparse.Namespace, *, create
     expected = cache_identity(args)
     if metadata_path.exists():
         try:
-            current = json.loads(metadata_path.read_text(encoding="utf-8"))
-        except json.JSONDecodeError:
-            raise SystemExit(f"error: cache_invalid: could not parse cache metadata at {metadata_path}")
-        if current.get("trusted_fast") != expected["trusted_fast"]:
+            current = read_cache_metadata(path)
+        except CacheMetadataError as exc:
+            raise SystemExit(f"error: cache_metadata_corrupt: {exc}") from exc
+        if current is None or current.get("schema_version") != CACHE_IDENTITY_SCHEMA:
             raise SystemExit(
-                f"error: cache_invalid: trusted_fast differs for cache {path}; refuse to reuse silently"
+                "error: cache_identity_mismatch: "
+                + json.dumps(
+                    {
+                        "cache_path": path.name,
+                        "warning": "legacy_cache_ignored",
+                        "legacy_schema": (current or {}).get("schema_version", "unversioned"),
+                    },
+                    sort_keys=True,
+                )
+            )
+        mismatches = compare_cache_identity(current, expected)
+        if mismatches:
+            raise SystemExit(
+                "error: cache_identity_mismatch: "
+                + json.dumps(
+                    {
+                        "cache_path": path.name,
+                        "mismatches": [mismatch.as_dict() for mismatch in mismatches],
+                        "safe_fallback_path": stable_fallback_leaf(path.parent, args).name,
+                    },
+                    sort_keys=True,
+                )
             )
     if create:
-        path.mkdir(parents=True, exist_ok=True)
-        write_json(metadata_path, expected)
+        try:
+            write_cache_metadata_atomic(path, expected)
+        except CacheLockTimeout as exc:
+            raise SystemExit(f"error: cache_lock_timeout: {exc}") from exc
 
 
 def plist_string_values(value: Any) -> Iterable[str]:
@@ -550,17 +612,37 @@ def resolve_derived_data_path(args: argparse.Namespace, create: bool) -> Path | 
     stem = project_stem(args)
     candidates = candidate_derived_data_leaves(root, stem)
     if args.derived_data_cache_strategy == "metadata":
-        current_entry = entry_path(args)
-        if current_entry is not None:
-            metadata_matches = [leaf for leaf in candidates if derived_data_leaf_mentions_entry(leaf, current_entry)]
-            match = newest_path(metadata_matches)
-            if match is not None:
-                return match
+        expected = cache_identity(args)
+        metadata_matches: list[Path] = []
+        for leaf in candidates:
+            try:
+                current = read_cache_metadata(leaf)
+            except CacheMetadataError:
+                args._cache_warnings = [
+                    *getattr(args, "_cache_warnings", []),
+                    f"cache_metadata_corrupt:{leaf.name}",
+                ]
+                continue
+            if current is None:
+                continue
+            if current.get("schema_version") != CACHE_IDENTITY_SCHEMA:
+                args._cache_warnings = [
+                    *getattr(args, "_cache_warnings", []),
+                    f"legacy_cache_ignored:{leaf.name}",
+                ]
+                continue
+            if identities_compatible(current, expected):
+                metadata_matches.append(leaf)
+        match = newest_path(metadata_matches)
+        if match is not None:
+            return match
 
     match = newest_path(candidates)
     if match is not None and args.derived_data_cache_strategy == "newest":
-        return match
-    if match is not None and args.derived_data_cache_strategy == "metadata":
+        args._cache_warnings = [
+            *getattr(args, "_cache_warnings", []),
+            "unsafe_legacy_cache_selection:The newest strategy does not prove cache compatibility.",
+        ]
         return match
 
     if create:
@@ -902,6 +984,7 @@ def make_plan(args: argparse.Namespace, create_dirs: bool) -> ResolvedPlan:
         if xctestrun_path is None and not args.dry_run:
             raise SystemExit("error: --auto-xctestrun requested, but no .xctestrun file was found under DerivedData/Build/Products")
     command, notes = build_command(args, derived_data_path, source_packages_path, package_cache_path, xctestrun_path)
+    notes.extend(getattr(args, "_cache_warnings", []))
     return ResolvedPlan(
         derived_data_path=derived_data_path,
         source_packages_path=source_packages_path,

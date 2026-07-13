@@ -48,6 +48,7 @@ def test_help_command_examples_use_supported_cli_shapes() -> None:
         "bin/xcode distribution",
         "bin/xcode package zip",
         "bin/xcode package audit",
+        "bin/xcode release verify",
         "bin/xcode doctor",
     )
 

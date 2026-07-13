@@ -25,7 +25,7 @@ def parse_args() -> argparse.Namespace:
     run_app.add_argument("--simulator-name", default="iPhone SE (3rd generation)")
     run_app.add_argument("--runtime", default=None)
     run_app.add_argument("--destination-id", default=None)
-    run_app.add_argument("--configuration", default="Debug")
+    run_app.add_argument("--configuration", default=None)
     run_app.add_argument("--timeout-seconds", type=int, default=900)
     run_app.add_argument("--no-cli-fallback", action="store_true")
     return parser.parse_args()
@@ -57,6 +57,7 @@ def step_record(name: str, result: dict[str, Any]) -> dict[str, Any]:
     envelope = parse_envelope(result)
     record: dict[str, Any] = {
         "name": name,
+        "attempted": True,
         "exit_code": result["exit_code"],
         "ok": bool(envelope.get("ok")) if isinstance(envelope, dict) else result["exit_code"] == 0,
         "summary": envelope.get("summary") if isinstance(envelope, dict) else result.get("summary") or compact_output(result["stdout"] or result["stderr"], 1200),
@@ -78,6 +79,16 @@ def step_record(name: str, result: dict[str, Any]) -> dict[str, Any]:
         if result.get("timed_out"):
             record["timed_out"] = True
     return record
+
+
+def skipped_step(name: str, *, prerequisite: str, reason: str = "prerequisite_failed") -> dict[str, Any]:
+    return {
+        "name": name,
+        "attempted": False,
+        "ok": False,
+        "skipped_reason": reason,
+        "prerequisite": prerequisite,
+    }
 
 
 def destination_from_resolve(result: dict[str, Any]) -> str | None:
@@ -210,6 +221,8 @@ def run_app_command(args: argparse.Namespace) -> int:
     preflight = call_plugin(preflight_args, timeout_seconds=45)
     steps.append(step_record("ide_preflight", preflight))
     if not result_succeeded(preflight):
+        steps.append(skipped_step("ide_build", prerequisite="ide_preflight"))
+        steps.append(skipped_step("ide_run", prerequisite="ide_build"))
         return emit_failure(
             "workflow",
             "xcode_ide_automation_failed",
@@ -218,6 +231,33 @@ def run_app_command(args: argparse.Namespace) -> int:
             warnings=warnings,
             next_actions=["Resolve Xcode IDE preflight errors, then retry the workflow."],
             exit_code=EXIT_CODES["xcode_ide_automation_failed"],
+        )
+
+    if args.configuration is not None:
+        steps.append(
+            skipped_step(
+                "ide_build",
+                prerequisite="configuration_preflight",
+                reason="configuration_not_supported",
+            )
+        )
+        steps.append(skipped_step("ide_run", prerequisite="ide_build"))
+        return emit_failure(
+            "workflow",
+            "configuration_not_supported",
+            "The GUI workflow cannot prove an explicitly requested configuration matches the scheme Build and Run actions.",
+            details={
+                "project_path": project_path,
+                "scheme": args.scheme,
+                "requested_configuration": args.configuration,
+                "steps": steps,
+            },
+            warnings=warnings,
+            next_actions=[
+                "Omit --configuration to use the scheme action configurations.",
+                "Use bin/xcode build when an explicit build-only configuration is required.",
+            ],
+            exit_code=EXIT_CODES["configuration_not_supported"],
         )
 
     build_args = [
@@ -237,6 +277,91 @@ def run_app_command(args: argparse.Namespace) -> int:
     ]
     build = call_plugin(build_args, timeout_seconds=min(args.timeout_seconds, 650))
     steps.append(step_record("ide_build", build))
+    if not result_succeeded(build):
+        steps.append(skipped_step("ide_run", prerequisite="ide_build"))
+        build_step = steps[-2]
+        build_error = str(build_step.get("error_type") or "")
+        transport_errors = {
+            "xcode_not_running",
+            "xcode_activation_failed",
+            "accessibility_not_trusted",
+            "xcode_ide_automation_failed",
+            "native_helper_unavailable",
+            "workspace_open_failed",
+        }
+        fallback_eligible = build_error in transport_errors and not build.get("timed_out")
+        if not allow_cli_fallback or not fallback_eligible:
+            error_type = build_error or (
+                "command_timeout" if build.get("timed_out") else "workflow_prerequisite_failed"
+            )
+            return emit_failure(
+                "workflow",
+                error_type,
+                "Xcode IDE Build failed; Run was skipped.",
+                details={
+                    "project_path": project_path,
+                    "scheme": args.scheme,
+                    "destination_id": destination_id,
+                    "steps": steps,
+                },
+                warnings=warnings,
+                next_actions=["Resolve the causal Build failure before retrying Run."],
+                exit_code=EXIT_CODES.get(error_type, EXIT_CODES["workflow_prerequisite_failed"]),
+            )
+
+        fallback_args = [
+            "build",
+            "--project" if project_path.endswith(".xcodeproj") else "--workspace",
+            project_path,
+            "--scheme",
+            args.scheme,
+            "--destination",
+            f"platform=iOS Simulator,id={destination_id}",
+            "--action",
+            "build",
+        ]
+        artifact_dir = create_artifact_dir("workflow-run-app")
+        fallback = call_plugin_capture(
+            fallback_args,
+            timeout_seconds=args.timeout_seconds,
+            artifact_dir=artifact_dir,
+            stem="plugin-cli-build-fallback",
+        )
+        steps.append(step_record("plugin_cli_build_fallback", fallback))
+        if fallback["exit_code"] == 0:
+            return emit_failure(
+                "workflow",
+                "run_not_verified",
+                "The fallback build succeeded, but app launch was not completed.",
+                details={
+                    "outcome": "build_only",
+                    "build_validated": True,
+                    "run_validated": False,
+                    "project_path": project_path,
+                    "scheme": args.scheme,
+                    "destination_id": destination_id,
+                    "steps": steps,
+                },
+                artifacts={"artifact_dir": str(artifact_dir)},
+                warnings=[*warnings, "GUI Build transport failed; fallback validated only a CLI build."],
+                next_actions=["Recover Xcode IDE automation before expecting Run behavior."],
+                exit_code=EXIT_CODES["run_not_verified"],
+            )
+        return emit_failure(
+            "workflow",
+            "xcode_ide_automation_failed",
+            "Xcode IDE Build transport and plugin-routed CLI build fallback both failed.",
+            details={
+                "project_path": project_path,
+                "scheme": args.scheme,
+                "destination_id": destination_id,
+                "steps": steps,
+            },
+            artifacts={"artifact_dir": str(artifact_dir)},
+            warnings=warnings,
+            next_actions=["Inspect the Build and fallback artifacts before retrying."],
+            exit_code=EXIT_CODES["xcode_ide_automation_failed"],
+        )
 
     run_args = [
         "ide",
@@ -255,8 +380,7 @@ def run_app_command(args: argparse.Namespace) -> int:
     ]
     run = call_plugin(run_args, timeout_seconds=min(args.timeout_seconds, 220))
     steps.append(step_record("ide_run", run))
-
-    if result_succeeded(build) and result_succeeded(run):
+    if result_succeeded(run):
         return emit_success(
             "workflow",
             "App built and run through Xcode IDE workflow",
@@ -264,58 +388,28 @@ def run_app_command(args: argparse.Namespace) -> int:
                 "project_path": project_path,
                 "scheme": args.scheme,
                 "destination_id": destination_id,
-                "configuration": args.configuration,
+                "configuration": "scheme_action_defaults",
                 "steps": steps,
             },
             warnings=warnings,
             next_actions=["Use simulator screenshots or app logs only when explicitly needed."],
         )
-
-    if not allow_cli_fallback:
-        return emit_failure(
-            "workflow",
-            "xcode_ide_automation_failed",
-            "Xcode IDE build/run workflow failed and CLI fallback is disabled",
-            details={"project_path": project_path, "scheme": args.scheme, "destination_id": destination_id, "steps": steps},
-            warnings=warnings,
-            next_actions=["Resolve Xcode IDE preflight/build/run errors, then retry."],
-            exit_code=EXIT_CODES["xcode_ide_automation_failed"],
-        )
-
-    fallback_args = [
-        "build",
-        "--project" if project_path.endswith(".xcodeproj") else "--workspace",
-        project_path,
-        "--scheme",
-        args.scheme,
-        "--configuration",
-        args.configuration,
-        "--destination",
-        f"platform=iOS Simulator,id={destination_id}",
-        "--action",
-        "build",
-    ]
-    artifact_dir = create_artifact_dir("workflow-run-app")
-    fallback = call_plugin_capture(fallback_args, timeout_seconds=args.timeout_seconds, artifact_dir=artifact_dir, stem="plugin-cli-build-fallback")
-    steps.append(step_record("plugin_cli_build_fallback", fallback))
-    if fallback["exit_code"] == 0:
-        return emit_success(
-            "workflow",
-            "Xcode IDE run failed, but plugin-routed CLI build fallback completed",
-            details={"project_path": project_path, "scheme": args.scheme, "destination_id": destination_id, "steps": steps},
-            artifacts={"artifact_dir": str(artifact_dir)},
-            warnings=[*warnings, "GUI run path did not complete; fallback only validated build through bin/xcode build."],
-            next_actions=["Fix IDE automation readiness before expecting Xcode.app Run behavior."],
-        )
     return emit_failure(
         "workflow",
-        "xcode_ide_automation_failed",
-        "Xcode IDE run workflow and plugin-routed CLI build fallback failed",
-        details={"project_path": project_path, "scheme": args.scheme, "destination_id": destination_id, "steps": steps},
-        artifacts={"artifact_dir": str(artifact_dir)},
+        str(steps[-1].get("error_type") or "xcode_ide_automation_failed"),
+        "Xcode IDE Build succeeded, but Run failed.",
+        details={
+            "project_path": project_path,
+            "scheme": args.scheme,
+            "destination_id": destination_id,
+            "steps": steps,
+        },
         warnings=warnings,
-        next_actions=["Inspect step artifacts and run bin/xcode ide preflight --json after resolving Xcode UI blockers."],
-        exit_code=EXIT_CODES["xcode_ide_automation_failed"],
+        next_actions=["Inspect the Run step without repeating the successful Build unnecessarily."],
+        exit_code=EXIT_CODES.get(
+            str(steps[-1].get("error_type") or ""),
+            EXIT_CODES["xcode_ide_automation_failed"],
+        ),
     )
 
 
